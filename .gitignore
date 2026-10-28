@@ -18,3 +18,6 @@ references/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Large media (too big for GitHub)
+*.mp4
