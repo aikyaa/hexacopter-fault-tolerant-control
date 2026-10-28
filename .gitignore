@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ROS 2 colcon build output
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Reference papers (not redistributed)
+references/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
