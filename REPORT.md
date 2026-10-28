@@ -1,6 +1,6 @@
 # Report: Hexacopter Fault Tolerant Control by Control Re-allocation
 
-🎥 **Simulation video (all cases, ROS 2 + RViz):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
+**Simulation video (all cases, ROS 2 + RViz):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
 
 ## 1. Objective
 
