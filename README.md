@@ -2,9 +2,9 @@
 
 Simulation of a hexacopter hovering at 10 m that loses a motor at t = 2 s and recovers using control re-allocation (cascaded PID + weighted control allocation). The fault is assumed known immediately (no fault detection).
 
-🎥 **Simulation video (all cases, ROS 2 + RViz):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
+**Simulation video (all cases, ROS 2):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
 
-📄 **Results report:** [REPORT.md](REPORT.md)
+**Results report:** [REPORT.md](REPORT.md)
 
 ## Structure
 
