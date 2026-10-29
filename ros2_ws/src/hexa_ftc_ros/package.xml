@@ -2,7 +2,7 @@
 <package format="3">
   <name>hexa_ftc_ros</name>
   <version>1.0.0</version>
-  <description>Hexacopter fault tolerant control (control re-allocation)</description>
+  <description>Hexacopter fault tolerant control (control re-allocation, ADRC)</description>
   <maintainer email="student@todo.todo">student</maintainer>
   <license>MIT</license>
   <exec_depend>rclpy</exec_depend>

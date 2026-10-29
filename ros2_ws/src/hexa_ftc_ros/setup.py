@@ -16,7 +16,7 @@ setup(
     zip_safe=True,
     maintainer="student",
     maintainer_email="student@todo.todo",
-    description="Hexacopter fault tolerant control (control re-allocation)",
+    description="Hexacopter fault tolerant control (control re-allocation, ADRC)",
     license="MIT",
     entry_points={
         "console_scripts": [

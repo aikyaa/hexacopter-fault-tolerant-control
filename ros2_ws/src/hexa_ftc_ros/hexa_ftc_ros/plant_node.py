@@ -1,6 +1,8 @@
-# hexacopter plant: dynamics + motor fault + disturbance + rviz markers
+# hexacopter plant: dynamics + motor fault (total or partial) + off-centre payload
+# + disturbance + rviz markers
 # rviz scene: drone with FTC, a "no FTC" ghost with the same fault, thrust arrows
 # and a live altitude chart, with slow motion around the fault
+# the controller is never told about the payload
 import os
 import time
 import numpy as np
@@ -12,6 +14,7 @@ from geometry_msgs.msg import TransformStamped, Vector3, Point
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import TransformBroadcaster
 from hexa_ftc_ros import hexa_ftc as h
+from hexa_ftc_ros import hexa_adrc as ha
 
 # motor positions (x, y) from the G matrix, x forward y left
 s3 = np.sqrt(3) / 2
@@ -39,6 +42,7 @@ C_FTC = (0.25, 0.90, 0.45, 1.0)
 C_GHOST = (1.00, 0.30, 0.25, 1.0)
 C_TEXT = (0.92, 0.93, 0.95, 1.0)
 C_DIM = (0.60, 0.62, 0.66, 1.0)
+C_PAYLOAD = (0.95, 0.80, 0.20, 1.0)
 
 
 def euler_to_quat(phi, th, psi):
@@ -100,7 +104,19 @@ class Plant(Node):
         self.declare_parameter("hold_end", False)      # keep showing final state instead of quitting
         self.declare_parameter("slowmo", 0.15)         # playback speed around the fault (1 = off)
         self.declare_parameter("ghost", True)          # show a drone with the same fault but no FTC
+        self.declare_parameter("fault_eta", 1.0)       # thrust loss of the failed motor (1 = total)
+        self.declare_parameter("payload_mass", 0.0)    # kg, picked up over the first ha.t_ramp s
+        self.declare_parameter("payload_r", 0.0)       # m from the centre
+        self.declare_parameter("payload_angle", 0.0)   # deg, 0 = toward M2, 180 = toward M1
+        self.declare_parameter("label", "WITH FTC (re-allocation)")   # title of the main drone
+        self.declare_parameter("tag", "")              # appended to the result file names
         self.fault_motor = self.get_parameter("fault_motor").value
+        self.eta = float(np.clip(self.get_parameter("fault_eta").value, 0.0, 1.0))
+        self.pl_m = self.get_parameter("payload_mass").value
+        self.pl_r = self.get_parameter("payload_r").value
+        self.pl_ang = self.get_parameter("payload_angle").value
+        self.label = self.get_parameter("label").value
+        self.tag = self.get_parameter("tag").value
         self.t_fault = self.get_parameter("fault_time").value
         self.dist_on = self.get_parameter("disturbance").value
         self.t_end = self.get_parameter("t_end").value
@@ -154,8 +170,25 @@ class Plant(Node):
         self.create_subscription(Float64MultiArray, "/motor_cmd", self.cmd_cb, 10)
         self.timer = self.create_timer(h.Ts, self.step)
         self.viz_timer = self.create_timer(1.0 / 20, lambda: self.publish_viz(self.fault_now()))   # rviz at 20 Hz
-        name = "motor %d fails at %.1f s" % (self.fault_motor, self.t_fault) if self.fault_motor > 0 else "no fault"
+        name = "motor %d loses %.0f%% at %.1f s" % (self.fault_motor, 100 * self.eta, self.t_fault) \
+            if self.fault_motor > 0 else "no fault"
+        if self.pl_m > 0:
+            name += ", payload %.2f kg at %.2f m / %.0f deg" % (self.pl_m, self.pl_r, self.pl_ang)
+            if self.fault_motor > 0 and self.t_fault < ha.t_ramp + 1:
+                self.get_logger().warn("payload is still being picked up at the fault, "
+                                       "use fault_time >= %.0f" % (ha.t_ramp + 3))
         self.get_logger().info("plant started: " + name + (", disturbance on" if self.dist_on else ""))
+
+    def eff_now(self):
+        eff = np.ones(6)
+        f = self.fault_now()
+        if f > 0:
+            eff[f-1] = 1 - self.eta
+        return eff
+
+    def payload_now(self):
+        # payload ramps in over ha.t_ramp seconds (picked up)
+        return ha.payload(self.pl_r, self.pl_ang, self.pl_m * min(self.t / ha.t_ramp, 1.0))
 
     def cmd_cb(self, msg):
         # /motor_cmd = [w (6), M (4), k], only use the reply to the state we just sent
@@ -165,7 +198,7 @@ class Plant(Node):
 
     def send_state(self):
         self.f = self.fault_now()
-        if self.f > 0:
+        if self.f > 0 and self.eta >= 1:
             self.y[8+self.f-1] = 0       # failed motor stops at once
         self.w_cmd = None
         self.publish_state(self.f)
@@ -217,7 +250,8 @@ class Plant(Node):
                 return
             self.sub_tick = 0
         f = self.f
-        self.data.append(np.r_[self.t, self.y, self.M_des, h.G @ (self.y[8:14]**2)])
+        eff = self.eff_now()
+        self.data.append(np.r_[self.t, self.y, self.M_des, h.G @ (eff * self.y[8:14]**2)])
         crash = abs(self.y[0]) > np.pi/2 or abs(self.y[1]) > np.pi/2 or self.y[6] < 0
         if crash or self.k >= self.n:
             if crash:
@@ -227,24 +261,29 @@ class Plant(Node):
             if self.hold_end:
                 self.get_logger().info("simulation finished, close rviz to exit")
             return
-        self.y = h.plant_step(self.y, self.t, self.w_cmd, f, h.dist(self.t, self.dist_on))
+        P = self.payload_now()
+        d = h.dist(self.t, self.dist_on)
+        self.y = ha.plant_step(self.y, self.w_cmd, eff, P, d)
         if self.ghost_on:
-            self.ghost_step(f)
+            self.ghost_step(f, eff, P, d)
         self.k += 1
         self.t = self.k * h.Ts
         self.record()
         self.send_state()                # next state right away
 
-    def ghost_step(self, f):
+    def ghost_step(self, f, eff, P, d):
+        # ghost: PID cascade, healthy mixer, fault unknown
         if f == 0:
             self.yg = self.y.copy()      # identical to the real drone until the fault
             return
         if self.g_down:
             return
         if self.g_ctrl is None:
-            self.g_ctrl = h.Controller()
-        w = h.allocate(self.g_ctrl.update(self.yg, z_ref), f, ftc=False)
-        self.yg = h.plant_step(self.yg, self.t, w, f, h.dist(self.t, self.dist_on))
+            self.g_ctrl = ha.Loop("pid", self.yg, "normal")
+        if self.eta >= 1:
+            self.yg[8+f-1] = 0
+        w, _, _ = self.g_ctrl.step(self.yg, eff, z_ref)
+        self.yg = ha.plant_step(self.yg, w, eff, P, d)
         if self.g_crash_t is None and (abs(self.yg[0]) > np.pi/2 or abs(self.yg[1]) > np.pi/2):
             self.g_crash_t = self.t
             self.get_logger().warn("no-FTC ghost flipped over at t=%.2f s" % self.t)
@@ -273,7 +312,7 @@ class Plant(Node):
         msg.data = int(f)
         self.fault_pub.publish(msg)          # fault info (no FDI, known at once)
         msg = Float64MultiArray()
-        msg.data = [float(v) for v in self.y] + [float(self.k), float(f)]   # state, step, fault
+        msg.data = [float(v) for v in self.y] + [float(self.k), float(f), self.eta]   # state, step, fault
         self.state_pub.publish(msg)
         a = np.rad2deg(self.y[:3])
         self.ang_pub.publish(Vector3(x=float(a[0]), y=float(a[1]), z=float(a[2])))
@@ -351,10 +390,19 @@ class Plant(Node):
             lbl = "M%d" % (i+1)
             col = C_TEXT
             if dead:
-                lbl, col = "M%d FAILED" % (i+1), C_DEAD
+                lbl = "M%d FAILED" % (i+1) if self.eta >= 1 else "M%d -%.0f%%" % (i+1, 100 * self.eta)
+                col = C_DEAD
             elif off:
                 lbl, col = "M%d off" % (i+1), C_OFF
             out.append(text(frame, ns + "_label", i, now, lbl, (x*1.25, yy*1.25, -0.06), 0.06, a(col)))
+        # payload box under the frame; angle is measured in the G lever plane
+        # (roll lever = y, pitch lever = -x), so 180 deg sits under M1
+        if self.pl_m > 0:
+            ang = np.deg2rad(self.pl_ang)
+            px, py = -self.pl_r * np.sin(ang), self.pl_r * np.cos(ang)
+            s = 0.05 + 0.1 * min(self.t / ha.t_ramp, 1.0)
+            out.append(mk(frame, ns + "_payload", 0, Marker.CUBE, now, a(C_PAYLOAD), (s, s, s),
+                          (px, py, -0.06 - s / 2)))
         return out
 
     def scene_markers(self, f, now, static):
@@ -368,10 +416,9 @@ class Plant(Node):
                 out.append(mk(W, "ref_ring", j, Marker.CYLINDER, now, (1, 1, 1, 0.06), (1.1, 1.1, 0.004),
                               (0, yo, z_ref)))
         # drone titles, follow the drones
-        out.append(text(W, "title", 0, now, "WITH FTC (re-allocation)", (0, y_ftc, self.y[6] + 0.55),
-                        0.10, C_FTC))
+        out.append(text(W, "title", 0, now, self.label, (0, y_ftc, self.y[6] + 0.55), 0.10, C_FTC))
         if self.ghost_on:
-            gt = "NO FTC (normal mixer)"
+            gt = "PID, NO FTC (fault unknown)"
             if self.g_crash_t is not None:
                 gt += " - FLIPPED, FALLING" if not self.g_down else " - CRASHED"
             out.append(text(W, "title", 1, now, gt, (0, y_ghost, max(self.yg[6], 0) + 0.55), 0.10, C_GHOST))
@@ -381,9 +428,11 @@ class Plant(Node):
         # status line
         st = "t = %5.2f s" % self.t
         if f > 0:
-            st += "   MOTOR %d FAILED" % f
+            st += "   MOTOR %d FAILED" % f if self.eta >= 1 else "   MOTOR %d LOST %.0f%%" % (f, 100 * self.eta)
         else:
             st += "   all motors healthy"
+        if self.pl_m > 0:
+            st += "   payload %.2f kg @ %.2f m" % (self.pl_m, self.pl_r)
         if self.slow_k > 1 and self.in_slowmo() and not self.done:
             st += "   [SLOW MOTION x%.2f]" % (1.0 / self.slow_k)
         if self.done:
@@ -469,12 +518,20 @@ class Plant(Node):
         D = np.array(self.data)
         if self.fault_motor > 0:
             name = "motor%d_fault" % self.fault_motor
-            title = "ROS2: motor %d failure at t=%.0fs" % (self.fault_motor, self.t_fault)
+            if self.eta < 1:
+                name += "_eta%02d" % round(100 * self.eta)
+            title = "ROS2: motor %d %s at t=%.0fs" % (
+                self.fault_motor, "failure" if self.eta >= 1 else "%.0f%% loss" % (100 * self.eta), self.t_fault)
             tf = self.t_fault
         else:
             name = "no_fault_disturbance" if self.dist_on else "no_fault"
             title = "ROS2: no failure" + (" + disturbance" if self.dist_on else "")
             tf = None
+        if self.pl_m > 0:
+            name += "_payload_r%02d_a%03d" % (round(100 * self.pl_r), round(self.pl_ang) % 360)
+            title += ", payload %.2f kg at %.2f m / %.0f deg" % (self.pl_m, self.pl_r, self.pl_ang)
+        name += self.tag
+        title = self.label + " - " + title
         h.save_csv(D, os.path.join(self.out_dir, name + ".csv"))
         h.plot_case(D, name, title, tf is not None, None, self.out_dir)
         self.get_logger().info("saved %s/%s.png and .csv" % (self.out_dir, name))
