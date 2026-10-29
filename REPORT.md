@@ -1,199 +1,119 @@
 # Report: Hexacopter Fault Tolerant Control: Control Re-allocation and ADRC
 
-**Simulation video (all cases, ROS 2 + RViz):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
+**Simulation videos (ROS 2 + RViz):** [Google Drive folder](https://drive.google.com/drive/folders/1Yvr0sd7mPDu3fAa-QyxSlOduzrMHX4zT?usp=sharing)
 
 ## 1. Objective
 
-Keep a hexacopter in stable hover after one motor fails completely, by redistributing the control effort over the remaining five motors (control re-allocation). The fault is assumed to be known as soon as it happens (no fault detection and isolation).
+Keep a hexacopter hovering after one motor fails, using two approaches:
 
-Section 6 then drops that assumption. Following the ADRC approach for quadcopters (Prachetas P et al., ETAAV 2025), an Active Disturbance Rejection Controller is never told about the fault and treats it as one more disturbance. It is tested with partial and total motor loss, and with an unknown off-centre payload in every direction.
+1. **Control re-allocation** (thesis method): the failed motor is known, and the control effort is redistributed over the remaining five motors.
+2. **ADRC** (after Prachetas P et al., ETAAV 2025): the controller is never told about the fault. It treats the fault, and an unknown off-centre payload, as one total disturbance that it estimates and cancels.
 
-## 2. Setup
+## 2. Model and baseline controller
 
 | Item | Value |
 |---|---|
 | Mass, arm length | 0.95 kg, 0.33 m |
 | Inertia (Jxx, Jyy, Jzz) | 6.89e-3, 6.89e-3, 3.44e-2 kg·m² |
-| Thrust / drag coefficient (kf, km) | 3.13e-4, 7.5e-6 |
-| Motor limit, time constant | 110 rad/s, 0.10 s |
-| Hover motor speed | 70.4 rad/s |
-| Control loop | 100 Hz (Ts = 0.01 s) |
-| Scenario | Hover at 10 m, total motor failure at t = 2 s, 10 s run |
+| Motors | kf = 3.13e-4, km = 7.5e-6, limit 110 rad/s, time constant 0.1 s, hover speed 70.4 rad/s |
+| Control loop | 100 Hz |
+| Scenario | Hover at 10 m, then one motor fails |
 
-**Controller:** a PX4-style cascade. Attitude uses angle P → rate PI, and altitude uses position P → climb-rate PID. The controller outputs the desired moments M = [τφ, τθ, τψ, T].
+- **Controller:** a PX4-style PID cascade. Attitude uses angle P → rate PI; altitude uses position P → climb-rate PID. It outputs the desired moments M = [τφ, τθ, τψ, T].
+- **Allocation:** M = G·ω², solved with a weighted pseudo-inverse, Ws = diag(0.3, 0.3, 0.15, 0.25). After a fault, the failed motor's column of G is set to zero. If a motor would saturate, a bounded least-squares solve is used instead.
+- **Controllability:** the controllability matrix has rank 4 for every single-motor failure, so the vehicle stays controllable. Every failure leaves yaw torque in **one direction only**, and roll or pitch also lose one direction.
 
-**Allocation:** motor speeds come from M = G·ω².
-- Healthy: weighted pseudo-inverse, ω² = (Ws·G)⁺·Ws·M, with Ws = diag(0.3, 0.3, 0.15, 0.25).
-- After a fault: the failed motor's column of G is set to zero (Gᵢ), and the same weighted pseudo-inverse is used with Gᵢ.
-- If any motor would saturate, a bounded least-squares solve (0 ≤ ω² ≤ ω_max²) is used instead.
-
-**Cases:** no fault, no fault + disturbance (a torque gust during 3–4 s and a −2 N vertical push during 6–7 s), and failure of each motor 1–6. Every fault case is run with and without re-allocation.
-
-## 3. Controllability and control authority
-
-The rank of the controllability matrix at hover is **4 for the healthy vehicle and for every single-motor failure**, so the vehicle remains controllable.
-
-The available torque at hover thrust drops after a failure, though, and becomes one-sided on some axes:
-
-![Control authority](python/results/control_authority.png)
-
-| Case | Roll (Nm) | Pitch (Nm) | Yaw (Nm) |
-|---|---|---|---|
-| Healthy | ±1.87 | ±2.16 | ±0.223 |
-| M1 fail | 0 … +1.87 | ±1.67 | 0 … +0.223 |
-| M3 fail | −1.87 … 0 | 0 … +2.16 | 0 … +0.223 |
-
-Every failure leaves **yaw torque in one direction only**, and roll or pitch also lose one direction (results for all six motors are in [control_authority.csv](python/results/control_authority.csv)). This explains the yaw behaviour in Section 4.
-
-## 4. Results
-
-### Summary (Python simulation)
-
-| Case | Crash without re-alloc. | Crash with | Max roll (°) | Max pitch (°) | Final yaw (°) | Min altitude (m) | Settle time (s) | Final motor speeds (rad/s) |
-|---|---|---|---|---|---|---|---|---|
-| No fault | – | No | 0.0 | 0.0 | 0.0 | 10.00 | 0.0 | 70 ×6 |
-| No fault + disturbance | – | No | 19.8 | 12.7 | −0.1 | 9.70 | 8.0* | 70 ×6 |
-| Motor 1 | Yes (t = 2.22 s) | No | 27.4 | 3.1 | 15.4 | 9.93 | 1.64 | 0 0 86 86 86 86 |
-| Motor 2 | Yes (t = 2.22 s) | No | 27.4 | 3.1 | −15.4 | 9.93 | 1.63 | 0 0 86 86 86 86 |
-| Motor 3 | Yes (t = 2.22 s) | No | 14.7 | 23.4 | 15.2 | 9.93 | 1.28 | 86 86 0 0 86 86 |
-| Motor 4 | Yes (t = 2.22 s) | No | 14.3 | 23.7 | −15.6 | 9.93 | 1.65 | 86 86 0 0 86 86 |
-| Motor 5 | Yes (t = 2.22 s) | No | 14.7 | 23.4 | −15.2 | 9.93 | 1.28 | 86 86 86 86 0 0 |
-| Motor 6 | Yes (t = 2.22 s) | No | 14.3 | 23.7 | 15.6 | 9.93 | 1.65 | 86 86 86 86 0 0 |
-
-Settle time is measured from the fault until roll and pitch stay below 2° and the altitude error stays below 5 cm.
-\*For the disturbance case it is measured from t = 2 s and is dominated by the push at 6–7 s.
-
-### With vs. without re-allocation
+## 3. Results: control re-allocation (fault known)
 
 ![Roll with and without re-allocation](python/results/compare_with_without_realloc.png)
 
-With the normal mixer, the vehicle flips (|roll| or |pitch| > 90°) only **0.22 s after any motor failure**. With re-allocation, every case recovers to level hover within about 1.3–1.7 s.
+| Failed motor | Without re-allocation | With re-allocation: peak roll / pitch | Min altitude | Settle time | Final yaw |
+|---|---|---|---|---|---|
+| M1, M2 | flips after 0.22 s | 27° / 3° | 9.93 m | 1.6 s | ±15° |
+| M3 – M6 | flips after 0.22 s | 15° / 24° | 9.93 m | 1.3 – 1.7 s | ±15° |
 
-### Motor 1 failure in detail
+- With the normal mixer, the vehicle flips 0.22 s after any motor failure. With re-allocation, every case returns to level hover.
+- The allocator also turns off the **opposite motor** (for example, M2 when M1 fails). The remaining four run at 86 rad/s, which leaves about 22% headroom below the limit.
+- **Yaw is given up.** Only one direction of yaw torque is left, so the heading settles about 15° off. Roll, pitch and altitude are kept, which is the intended trade-off.
+- Peak roll for M1 matches the thesis (27.4° here, about 28° there).
 
-![Motor 1 failure](python/results/motor1_fault.png)
+## 4. ADRC: fault treated as a disturbance
 
-- Roll peaks at 27° and returns to level. Altitude dips by only 6.6 cm.
-- The allocator also shuts down the **opposite motor (M2)**, and the remaining four run at 86 rad/s to carry the full weight. That is 4·86² ≈ 6·70.4², which leaves about 22% headroom below the 110 rad/s limit.
-- **Yaw is not held.** The heading drifts and settles about ±15° off, because only one direction of yaw torque is left (Section 3). Roll, pitch and altitude are prioritised, which is the intended trade-off.
+### Implementation
 
-Compared with the thesis results for the same case (values read approximately from its figures):
+Each axis (roll, pitch, yaw, altitude) has its own loop:
 
-| Quantity | Thesis | This sim |
-|---|---|---|
-| Peak roll | ~28° | 27.4° |
-| Peak roll rate | ~200 °/s | 160 °/s |
-| Final yaw | ~36° | 15.4° |
-| Min altitude | ~9.55 m | 9.93 m |
+- **Tracking differentiator** (Han's `fhan`): turns the reference into a smooth profile.
+- **Linear extended state observer (LESO):** estimates the angle z₁, the rate z₂ and the total disturbance z₃. Its gains are 3ω_o, 3ω_o² and ω_o³.
+- **Control law:** u = (k_p(v₁ − z₁) + k_d(v₂ − z₂) − z₃) / b₀, with k_p = ω_c², k_d = 2ω_c, and b₀ = 1/J (1/m for altitude).
 
-Peak roll matches closely. Yaw and altitude deviations are smaller here, most likely because the rotor-drag yaw damping and the motor model in this sim differ from the thesis.
+Choices specific to the hexacopter:
 
-### Symmetry
+- **Fault-blind:** the moments always go through the **healthy mixer**. The controller gets no fault information.
+- **Gains:** roll and pitch use ω_c = 14 and ω_o = 50 rad/s; yaw and altitude use 2 and 10 rad/s. Lower attitude gains react too slowly, and the vehicle tips over before the observer catches the fault.
+- **Motor lag:** the LESO is fed the commanded torque passed through the known 0.1 s motor model. Without this, the observer treats the motor lag as a disturbance and the loop goes unstable.
+- **Payload:** a 0.2 kg point mass (about 20% of the vehicle mass) at radius r and direction θ in the rotor plane. It is picked up over 0–2 s, and then motor 1 fails at t = 5 s. Neither controller is told about the payload.
 
-Failures of motors 1/2 mainly disturb roll, and failures of 3–6 disturb roll and pitch together. Failures of mirrored motors give the same response magnitudes with opposite yaw sign, as expected from the airframe geometry.
+Four setups are compared: PID with the fault unknown, PID + re-allocation with the fault known, **ADRC with the fault unknown** (the proposed method), and ADRC + re-allocation as a reference.
 
-## 5. ROS 2 implementation
+Code: [python/hexa_adrc.py](python/hexa_adrc.py). Results: [python/results_adrc/](python/results_adrc/).
 
-The same plant and controller are split into a `plant_node` and an `ftc_node` that talk over ROS 2 topics, with RViz visualisation (a "ghost" drone shows the same fault without FTC). The ROS runs reproduce the Python results exactly: the same peak angles, final yaw and minimum altitude in all eight cases. Results are in [ros2_ws/results_ros/](ros2_ws/results_ros/).
-
-## 6. ADRC: the fault treated as a disturbance
-
-### Approach
-
-Control re-allocation needs to know which motor failed. ADRC does not. It lumps the fault, model errors and external loads into one **total disturbance**, estimates it online with an extended state observer, and cancels it.
-
-Each axis (roll, pitch, yaw, altitude) gets its own loop, as in the paper:
-
-- **Tracking differentiator** (Han's `fhan`): a smooth reference profile with the paper's acceleration limits.
-- **Linear extended state observer (LESO):** estimates the angle z₁, the rate z₂ and the total disturbance z₃.
-- **Control law:** u = (k_p(v₁ − z₁) + k_d(v₂ − z₂) − z₃) / b₀, with b₀ = 1/J (or 1/m for altitude).
-
-Hexacopter-specific choices:
-
-- **Allocation:** the controller's moments go through the **normal (healthy) mixer**. It never receives fault information.
-- **Gains:** roll and pitch use ω_c = 14 and ω_o = 50 rad/s; yaw and altitude use 2 and 10 rad/s. A grid search showed that lower attitude gains, like 5 and 15, are too slow: a sudden motor loss tips the vehicle over before the observer notices it.
-- **Motor lag:** the LESO is fed the commanded torque passed through the known 0.1 s motor model. Without this, the observer mistakes the motor lag for a disturbance and the loop goes unstable.
-- **Plant:** RK4 instead of `solve_ivp`. On the baseline case it reproduces Section 4 to within 0.03°.
-
-**Cases:**
-- **Motor 1 fault sweep:** 0, 25, 50, 75 and 100% thrust loss.
-- **Payload placement:** a 0.2 kg payload (about 20% of the vehicle mass), picked up over 0–2 s at 10 cm from the centre, in 12 directions, followed by total motor 1 failure at t = 5 s. Neither controller is told about it.
-- **Payload offset limit:** the largest offset that still recovers, in each direction, found by bisection.
-- **Sensor noise:** 0.3° and 1° of noise on the attitude.
-
-Four setups are compared: PID with the fault unknown, PID + re-allocation with the fault known (Sections 2–4), **ADRC with the fault unknown** (proposed), and ADRC + re-allocation with the fault known (reference).
-
-Script: [python/hexa_adrc.py](python/hexa_adrc.py). Results: [python/results_adrc/](python/results_adrc/).
-
-### Fault severity (motor 1, no payload)
+### Key result 1: ADRC survives the fault without knowing about it
 
 ![Fault sweep](python/results_adrc/fault_sweep.png)
 
-Peak tilt after the fault:
+Peak tilt after a motor 1 fault, by thrust loss:
 
-| Thrust loss | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc, fault known |
-|---|---|---|---|---|
-| 25% | crash | 11.4° | **7.2°** | 3.4° |
-| 50% | crash | 20.8° | **15.8°** | 5.7° |
-| 75% | crash | 23.1° | **25.9°** | 7.4° |
-| 100% | crash | 27.4° | **38.3°** | 9.8° |
+| Thrust loss of M1 | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** |
+|---|---|---|---|
+| 25% | crash | 11.4° | **7.2°** |
+| 50% | crash | 20.8° | **15.8°** |
+| 75% | crash | 23.1° | **25.9°** |
+| 100% | crash | 27.4° | **38.3°** |
 
-At 100% loss:
+- Fault-blind PID crashes even at 25% thrust loss. **Fault-blind ADRC recovers at every level.**
+- Up to 50% loss, it even does better than re-allocation, which knows the fault.
+- At total loss, ADRC dips 44 cm (re-allocation: 7 cm) and settles in 2.5 s (re-allocation: 1.6 s).
+- ADRC also ends up turning off M2, the configuration re-allocation chooses on purpose. ADRC gets there by itself, through the observer.
 
-| | PID + re-alloc, fault known | **ADRC, fault unknown** |
-|---|---|---|
-| Min altitude | 9.93 m | **9.56 m** |
-| Settle time | 1.6 s | **2.5 s** |
-| Final yaw | 16° | **53°** |
-
-- **Without any fault information, ADRC survives every fault level.** Fault-blind PID crashes even at 25% loss.
-- Up to 50% loss, fault-blind ADRC is better than the thesis method, which does know about the fault. At total loss it still recovers, at the cost of more tilt, more altitude dip and a larger yaw drift.
-- ADRC also ends up shutting off **M2**, the motor opposite the failed one. Re-allocation picks that configuration deliberately, but ADRC reaches it by itself: it keeps asking the healthy mixer for about −1.3 N·m of roll torque, and the LESO cancels the mismatch.
-
-### Payload placement (0.2 kg, motor 1 total failure)
+### Key result 2: payload location matters
 
 ![Payload offset envelope](python/results_adrc/payload_envelope.png)
 
-Largest payload offset that still recovers:
+Largest payload offset (0.2 kg) that still recovers after motor 1 fails:
 
-| Payload side | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc, fault known |
+| Payload side | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc |
 |---|---|---|---|---|
-| Away from the failed motor (M2, M3, M6 side) | 0 | ≤ 1.3 cm | **11–19 cm** | 15–21 cm |
-| Toward the failed motor (M1, M4, M5 side) | 0 | ≤ 0.8 cm | **2–5 cm** | 15–21 cm |
+| Away from the failed motor (M2, M3, M6) | 0 | ≤ 1.3 cm | **11–19 cm** | 15–21 cm |
+| Toward the failed motor (M1, M4, M5) | 0 | ≤ 0.8 cm | **2–5 cm** | 15–21 cm |
 
-- **The PID cascade cannot carry an unknown off-centre payload at all.** Its rate integrator is clamped at about 0.007 N·m, so it hangs at about 38° of tilt before the fault even happens, and then crashes.
-- **ADRC holds the payload almost level** (under 1° of tilt during pickup) and recovers from the motor failure in 8 of the 12 directions at 10 cm.
-- **The weak spot is a payload on the failed motor's side.** There the healthy mixer keeps sending effort to the dead motor and the remaining motors saturate. This is the one case where knowing the fault matters: with re-allocation, ADRC tolerates 15–21 cm in every direction.
+- **PID cannot carry an unknown off-centre payload at all.** Its integrator is clamped, so the vehicle already hangs at about 38° of tilt before the fault.
+- **ADRC holds the payload level**, with under 1° of tilt. At 10 cm it survives the fault in 8 of the 12 directions.
+- **The weak spot is a payload on the failed motor's side.** There the healthy mixer keeps sending effort to the dead motor, and the motors on the opposite side saturate. This is the one case where knowing the fault matters: ADRC + re-allocation handles 15–21 cm in every direction.
 
-![Payload response and LESO estimate](python/results_adrc/payload_response.png)
+### Trade-off: sensor noise
 
-The bottom row shows the LESO at work. Its estimate z₃ follows the true roll disturbance: the payload ramp of about ±28 rad/s², then the jump to about 180 rad/s² when the motor fails. It settles within about 0.2 s, without the controller ever being told what changed.
+With 1° of attitude noise, ADRC still recovers, but its motor commands jitter about **7× more** than PID + re-allocation (1.38 vs 0.19 rad/s). This is the cost of its high observer bandwidth.
 
-### Sensor noise (motor 1 total failure)
+## 5. ROS 2 implementation
 
-| Attitude noise | PID + re-alloc, peak tilt / motor jitter | **ADRC, fault unknown: peak tilt / motor jitter** |
-|---|---|---|
-| 0° | 27.4° / 0.00 rad/s | 38.3° / 0.00 rad/s |
-| 0.3° | 27.8° / 0.06 rad/s | 38.2° / 0.39 rad/s |
-| 1.0° | 28.3° / 0.19 rad/s | 37.8° / 1.38 rad/s |
+- **Nodes:** `plant_node` (dynamics, fault, payload, RViz scene) and `ftc_node` (controller and allocation) run in lockstep over `/state` and `/motor_cmd`. Both import the same Python modules as the offline study.
+- **Launch arguments:**
+  - `controller:=pid|adrc`
+  - `use_ftc:=true|false` (re-allocation on or off)
+  - `fault_motor`, `fault_eta`
+  - `payload_mass`, `payload_r`, `payload_angle`
+- **Validation:** the ROS runs reproduce the Python results, with the same crash outcomes, peak angles and minimum altitudes, and roll traces within 0.03°.
 
-ADRC still recovers with 1° of noise, but its high observer bandwidth passes about **7× more noise into the motor commands**. This is the main practical trade-off of the fault-blind approach.
+Results: [ros2_ws/results_ros/](ros2_ws/results_ros/) (re-allocation) and [ros2_ws/results_adrc_ros/](ros2_ws/results_adrc_ros/) (ADRC).
 
-### ROS 2
+## 6. Conclusions
 
-`ftc_node` takes `controller:=adrc`, and `use_ftc:=false` makes it fault-blind. `plant_node` takes partial faults (`fault_eta`) and a payload (`payload_mass`, `payload_r`, `payload_angle`). Both nodes use the same [hexa_adrc.py](ros2_ws/src/hexa_ftc_ros/hexa_ftc_ros/hexa_adrc.py) as the Python study.
-
-Seven headless runs reproduce the Python results: the same crash or no-crash outcome, peak tilt and minimum altitude, with roll traces within 0.03°. The runs are in [ros2_ws/run_adrc_cases.sh](ros2_ws/run_adrc_cases.sh) and the results in [ros2_ws/results_adrc_ros/](ros2_ws/results_adrc_ros/).
-
-## 7. Conclusions
-
-- A hexacopter stays controllable after any single total motor failure, but it loses symmetric torque authority, most critically in yaw.
-- Without re-allocation, the PID cascade loses the vehicle within 0.22 s. With re-allocation it recovers in under 1.7 s, with peak tilt below 28° and altitude loss below 7 cm. The price is a yaw offset of about 15°, and the remaining motors running at 86 rad/s instead of 70 rad/s.
-- **ADRC removes the need to know which motor failed.** Treating the fault as a disturbance, it recovers at every motor 1 fault level tested (25–100% thrust loss). At total loss the peak tilt is 38° and the altitude dip 44 cm.
-- **ADRC also handles an unknown payload**, which the PID cascade cannot. Fault-blind, it tolerates 11–19 cm of offset on the healthy side, but only 2–5 cm next to the failed motor. Adding fault knowledge (re-allocation) on top of ADRC covers every direction.
+- With the fault known, re-allocation recovers from any single motor failure in under 1.7 s, with tilt under 28° and altitude loss under 7 cm. The heading drifts about 15°.
+- **ADRC removes the need to know which motor failed.** It recovers from 25–100% thrust loss of a motor, and it carries an unknown off-centre payload, which PID cannot.
+- Fault-blind ADRC fails when the payload sits on the failed motor's side, beyond 2–5 cm. Combining ADRC with fault knowledge covers every direction.
 - **Limitations:**
-  - The re-allocation results assume the fault is known instantly.
-  - The ADRC gains are high, which makes it sensitive to sensor noise.
+  - Re-allocation assumes the fault is detected instantly.
+  - ADRC's high gains make it sensitive to sensor noise.
   - The payload is a point mass in the rotor plane.
-  - There are no actuator rate limits.
-  - The model covers altitude and attitude only, with no horizontal position control.
+  - There is no horizontal position control.

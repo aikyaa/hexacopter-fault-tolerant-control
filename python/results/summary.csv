@@ -1,5 +1,5 @@
 case,crashed,crashed_without_realloc,max_roll_deg,max_pitch_deg,final_yaw_deg,max_wx_degps,max_wz_degps,min_z_m,settle_time_s,final_motor_speeds
-no_fault,False,,0.0,0.0,-0.0,0.0,0.0,10.0,0.0,70 70 70 70 70 70
+no_fault,False,,0.0,0.0,0.0,0.0,0.0,10.0,0.0,70 70 70 70 70 70
 no_fault_disturbance,False,,19.813,12.667,-0.108,65.891,6.936,9.696,8.0,70 70 70 70 70 70
 motor1_fault,False,True,27.439,3.143,15.424,160.075,11.414,9.934,1.64,0 0 86 86 86 86
 motor2_fault,False,True,27.416,3.138,-15.412,159.94,11.404,9.934,1.63,0 0 86 86 86 86

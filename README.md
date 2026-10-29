@@ -5,7 +5,7 @@ Simulation of a hexacopter hovering at 10 m that loses a motor and recovers. Two
 - **Control re-allocation:** cascaded PID + weighted control allocation. The fault is assumed known immediately.
 - **ADRC:** active disturbance rejection control. The controller is not told about the fault and treats it, along with an unknown off-centre payload, as a disturbance.
 
-**Simulation video (all cases, ROS 2):** [Google Drive](https://drive.google.com/file/d/1snuhvErvYkib8klGl688AJ4HS31CERCj/view?usp=sharing)
+**Simulation videos (ROS 2 + RViz):** [Google Drive folder](https://drive.google.com/drive/folders/1Yvr0sd7mPDu3fAa-QyxSlOduzrMHX4zT?usp=sharing)
 
 **Results report:** [REPORT.md](REPORT.md)
 
@@ -49,4 +49,4 @@ Example: fault-blind ADRC with an unknown payload.
 ros2 launch hexa_ftc_ros hexa_ftc.launch.py controller:=adrc use_ftc:=false fault_motor:=1 fault_time:=5.0 t_end:=15.0 payload_mass:=0.2 payload_r:=0.1 payload_angle:=90
 ```
 
-On WSL, run `ros2 daemon stop && ros2 daemon start` first if the plant keeps reporting that `ftc_node` was not found.
+On WSL, run `ros2 daemon stop && ros2 daemon start` first if the simulation does not start (the nodes do not find each other).
