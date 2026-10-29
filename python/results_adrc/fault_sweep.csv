@@ -1,0 +1,21 @@
+setup,eta,crashed,pre_tilt_deg,max_tilt_deg,final_tilt_deg,final_yaw_deg,min_z_m,max_motor,settle_s,ok
+PID (fault unknown),0.000,False,0.000,0.000,0.000,-0.000,10.000,70.445,0.000,True
+PID + re-allocation (fault known - thesis),0.000,False,0.000,0.000,0.000,-0.000,10.000,70.445,0.000,True
+ADRC (fault unknown - proposed),0.000,False,0.000,0.000,0.000,-0.000,10.000,70.970,0.000,True
+ADRC + re-allocation (fault known - reference),0.000,False,0.000,0.000,0.000,-0.000,10.000,70.970,0.000,True
+PID (fault unknown),0.250,True,0.000,90.266,90.266,3.376,9.792,109.071,0.780,False
+PID + re-allocation (fault known - thesis),0.250,False,0.000,11.418,0.120,-0.006,9.989,75.391,0.930,True
+ADRC (fault unknown - proposed),0.250,False,0.000,7.185,0.000,0.000,9.948,80.036,0.930,True
+ADRC + re-allocation (fault known - reference),0.250,False,0.000,3.412,0.000,0.000,9.990,74.919,0.230,True
+PID (fault unknown),0.500,True,0.000,93.647,93.647,3.628,9.915,101.797,0.350,False
+PID + re-allocation (fault known - thesis),0.500,False,0.000,20.818,0.214,-0.011,9.972,83.135,1.670,True
+ADRC (fault unknown - proposed),0.500,False,0.000,15.801,0.000,0.000,9.862,93.074,1.650,True
+ADRC + re-allocation (fault known - reference),0.500,False,0.000,5.678,0.000,0.000,9.976,80.493,0.400,True
+PID (fault unknown),0.750,True,0.000,92.350,92.350,3.369,9.940,97.892,0.260,False
+PID + re-allocation (fault known - thesis),0.750,False,0.000,23.106,0.205,-0.011,9.953,89.974,1.690,True
+ADRC (fault unknown - proposed),0.750,False,0.000,25.873,0.000,0.000,9.722,106.833,1.980,True
+ADRC + re-allocation (fault known - reference),0.750,False,0.000,7.372,0.000,0.000,9.956,87.360,0.430,True
+PID (fault unknown),1.000,True,0.000,95.087,95.087,3.447,9.947,92.830,0.220,False
+PID + re-allocation (fault known - thesis),1.000,False,0.000,27.439,0.066,15.532,9.934,97.045,1.640,True
+ADRC (fault unknown - proposed),1.000,False,0.000,38.273,0.197,53.142,9.557,101.711,2.450,True
+ADRC + re-allocation (fault known - reference),1.000,False,0.000,9.758,0.060,16.234,9.937,92.446,0.910,True

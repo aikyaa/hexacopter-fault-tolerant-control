@@ -1,0 +1,7 @@
+setup,noise_deg,motor_jitter_radps,crashed,pre_tilt_deg,max_tilt_deg,final_tilt_deg,final_yaw_deg,min_z_m,max_motor,settle_s,ok
+PID + re-allocation (fault known - thesis),0.000,0.000,False,0.000,27.439,0.066,15.532,9.934,97.045,1.640,True
+ADRC (fault unknown - proposed),0.000,0.002,False,0.000,38.273,0.197,53.142,9.557,101.711,2.450,True
+PID + re-allocation (fault known - thesis),0.300,0.056,False,0.259,27.772,0.112,15.838,9.934,97.218,1.650,True
+ADRC (fault unknown - proposed),0.300,0.386,False,0.746,38.177,0.183,58.600,9.544,102.162,2.580,True
+PID + re-allocation (fault known - thesis),1.000,0.188,False,0.861,28.341,0.216,16.424,9.933,97.618,1.670,True
+ADRC (fault unknown - proposed),1.000,1.379,False,2.393,37.767,2.077,83.948,9.456,105.919,10.000,True
