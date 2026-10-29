@@ -108,9 +108,16 @@ class Loop:
         w_next = self.w_model + self.a * (w_cmd - self.w_model)
         M_exp = (h.G * eff_known) @ ((self.w_model**2 + w_next**2) / 2)
         self.w_model = w_next
+        self.M_exp = M_exp
         if self.ctrl == "adrc":
             self.C.applied(M_exp)
         return w_cmd, M_des
+
+    def roll_dist(self):
+        # LESO estimate of the roll disturbance
+        if self.ctrl == "adrc":
+            return self.C.axes[0].z[2]
+        return 0.0
 
 
 def payload(r, ang, mass):
@@ -137,7 +144,7 @@ def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, mass=mp, noise=0.0
             y_meas[3:6] += np.deg2rad(5 * noise) * rng.standard_normal(3)
             y_meas[6] += 0.01 * noise * rng.standard_normal()
         w_cmd, M_des = loop.step(y_meas, eff if ftc else np.ones(6))
-        data.append(np.r_[t, y])
+        data.append(np.r_[t, y, loop.M_exp[0], loop.roll_dist()])
         if h.crashed(y):
             crash = True
             break
@@ -298,7 +305,46 @@ if __name__ == "__main__":
     plt.close(fig)
     print("envelope done")
 
-    # 4) sensor noise, motor 1 total failure
+    # 4) time response for a few payload places + LESO disturbance estimate
+    show = [("centre", 0.0, 0.0), ("toward M1 (failed)", 0.1, 180.0),
+            ("toward M2", 0.1, 0.0), ("between M4/M6", 0.1, 90.0)]
+    jobs = []
+    for name, r, a in show:
+        for s in SETUPS:
+            jobs.append(dict(SETUPS[s], r=r, ang=a))
+    runs = pool.map(run_args, jobs)
+    fig, ax = plt.subplots(3, len(show), figsize=(20, 10), sharex=True)
+    i = 0
+    for j, (name, r, a) in enumerate(show):
+        for s in SETUPS:
+            D, crash = runs[i]
+            i += 1
+            tilt = np.rad2deg(np.maximum(abs(D[:, 1]), abs(D[:, 2])))
+            ax[0, j].plot(D[:, 0], tilt, STYLE[s], label=NAMES[s] + (" (crash)" if crash else ""))
+            ax[1, j].plot(D[:, 0], D[:, 7], STYLE[s])
+            if s == "adrc_blind":
+                # actual roll disturbance = roll acceleration - expected torque / Jxx
+                pdot = np.gradient(D[:, 4], h.Ts)
+                ax[2, j].plot(D[:, 0], pdot - D[:, 15] / h.Jxx, label="actual")
+                ax[2, j].plot(D[:, 0], D[:, 16], "--", label="LESO estimate z3")
+        ax[0, j].set_title("payload %s (r = %.2f m)" % (name, r))
+        ax[0, j].set_ylim(0, 60)
+        ax[1, j].set_ylim(9.0, 10.5)
+        ax[2, j].set_ylim(-100, 250)
+        ax[0, j].legend(fontsize=6)
+        ax[2, j].legend(fontsize=7)
+        ax[2, j].set_xlabel("time (s)")
+        for a_ in ax[:, j]:
+            a_.axvline(t_fault, color="r", lw=1)
+            a_.grid(True)
+    ax[0, 0].set_ylabel("tilt (deg)")
+    ax[1, 0].set_ylabel("z (m)")
+    ax[2, 0].set_ylabel("roll disturbance (rad/s^2)\nADRC (fault unknown)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "payload_response.png"), dpi=110)
+    plt.close(fig)
+
+    # 5) sensor noise, motor 1 total failure
     rows = []
     for noise in [0.0, 0.3, 1.0]:
         for s in ["pid_realloc", "adrc_blind"]:

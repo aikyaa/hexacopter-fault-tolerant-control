@@ -23,6 +23,8 @@ Keep a hexacopter hovering after one motor fails, using two approaches:
 - **Allocation:** M = G·ω², solved with a weighted pseudo-inverse, Ws = diag(0.3, 0.3, 0.15, 0.25). After a fault, the failed motor's column of G is set to zero. If a motor would saturate, a bounded least-squares solve is used instead.
 - **Controllability:** the controllability matrix has rank 4 for every single-motor failure, so the vehicle stays controllable. Every failure leaves yaw torque in **one direction only**, and roll or pitch also lose one direction.
 
+![Control authority](python/results/control_authority.png)
+
 ## 3. Results: control re-allocation (fault known)
 
 ![Roll with and without re-allocation](python/results/compare_with_without_realloc.png)
@@ -36,6 +38,10 @@ Keep a hexacopter hovering after one motor fails, using two approaches:
 - The allocator also turns off the **opposite motor** (for example, M2 when M1 fails). The remaining four run at 86 rad/s, which leaves about 22% headroom below the limit.
 - **Yaw is given up.** Only one direction of yaw torque is left, so the heading settles about 15° off. Roll, pitch and altitude are kept, which is the intended trade-off.
 - Peak roll for M1 matches the thesis (27.4° here, about 28° there).
+
+Motor 1 failure in detail: angles, rates, altitude, motor speeds and torques. The dotted line is the same failure without re-allocation.
+
+![Motor 1 failure](python/results/motor1_fault.png)
 
 ## 4. ADRC: fault treated as a disturbance
 
@@ -91,6 +97,10 @@ Largest payload offset (0.2 kg) that still recovers after motor 1 fails:
 - **ADRC holds the payload level**, with under 1° of tilt. At 10 cm it survives the fault in 8 of the 12 directions.
 - **The weak spot is a payload on the failed motor's side.** There the healthy mixer keeps sending effort to the dead motor, and the motors on the opposite side saturate. This is the one case where knowing the fault matters: ADRC + re-allocation handles 15–21 cm in every direction.
 
+![Payload response and LESO estimate](python/results_adrc/payload_response.png)
+
+The bottom row shows how ADRC works. The LESO estimate z₃ follows the actual roll disturbance: first the payload pick-up (about ±28 rad/s²), then the jump when motor 1 fails (about 140–180 rad/s²). It catches the jump within about 0.2 s, without being told what changed. With the payload toward M1, the disturbance is still estimated correctly, but the motors saturate and the vehicle crashes.
+
 ### Trade-off: sensor noise
 
 With 1° of attitude noise, ADRC still recovers, but its motor commands jitter about **7× more** than PID + re-allocation (1.38 vs 0.19 rad/s). This is the cost of its high observer bandwidth.
@@ -106,6 +116,10 @@ With 1° of attitude noise, ADRC still recovers, but its motor commands jitter a
 - **Validation:** the ROS runs reproduce the Python results, with the same crash outcomes, peak angles and minimum altitudes, and roll traces within 0.03°.
 
 Results: [ros2_ws/results_ros/](ros2_ws/results_ros/) (re-allocation) and [ros2_ws/results_adrc_ros/](ros2_ws/results_adrc_ros/) (ADRC).
+
+ROS 2 run of fault-blind ADRC with the 0.2 kg payload 10 cm between M4 and M6, and motor 1 failing at t = 5 s:
+
+![ROS 2 ADRC run](ros2_ws/results_adrc_ros/motor1_fault_payload_r10_a090_adrc_blind.png)
 
 ## 6. Conclusions
 
