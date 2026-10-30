@@ -108,41 +108,35 @@ def dist(t, on):
     return d
 
 
-def no_payload():
-    # (payload mass * position, inertia, total mass)
-    return np.zeros(2), np.array([Jxx, Jyy, Jzz]), m
-
-
-def dyn(y, w_cmd, eff, payload, d):
+def dyn(y, w_cmd, eff, cg, d):
+    # cg = CG offset from the centre of the motors, in the roll/pitch lever plane (m)
     phi, th, psi, p, q, r, z, zd = y[:8]
     w = y[8:14]
-    mp_pos, J, mass = payload
-    c = np.cos(phi) * np.cos(th)
     M = G @ (eff * w**2)
-    M[:2] -= mp_pos * g * c            # payload weight off the centre
+    M[:2] -= cg * M[3]                 # thrust acts off the CG
     M[:3] += d[:3]
     M[2] -= c_yaw * r
     # eq 1.1 - 1.3
-    pd = (J[1] - J[2]) / J[0] * q * r + M[0] / J[0]
-    qd = (J[2] - J[0]) / J[1] * p * r + M[1] / J[1]
-    rd = (J[0] - J[1]) / J[2] * p * q + M[2] / J[2]
+    pd = (Jyy - Jzz) / Jxx * q * r + M[0] / Jxx
+    qd = (Jzz - Jxx) / Jyy * p * r + M[1] / Jyy
+    rd = (Jxx - Jyy) / Jzz * p * q + M[2] / Jzz
     phid = p + np.sin(phi) * np.tan(th) * q + np.cos(phi) * np.tan(th) * r
     thd = np.cos(phi) * q - np.sin(phi) * r
     psid = (np.sin(phi) * q + np.cos(phi) * r) / np.cos(th)
-    zdd = c * M[3] / mass - g + d[3] / mass
+    zdd = np.cos(phi) * np.cos(th) * M[3] / m - g + d[3] / m
     wd = (w_cmd - w) / tau_mot
     wd[eff == 0] = 0
     return np.r_[phid, thd, psid, pd, qd, rd, zd, zdd, wd]
 
 
-def plant_step(y, w_cmd, eff, payload, d=np.zeros(4)):
+def plant_step(y, w_cmd, eff, cg=np.zeros(2), d=np.zeros(4)):
     # RK4, 4 sub steps per control step
     dt = Ts / 4
     for i in range(4):
-        k1 = dyn(y, w_cmd, eff, payload, d)
-        k2 = dyn(y + dt/2 * k1, w_cmd, eff, payload, d)
-        k3 = dyn(y + dt/2 * k2, w_cmd, eff, payload, d)
-        k4 = dyn(y + dt * k3, w_cmd, eff, payload, d)
+        k1 = dyn(y, w_cmd, eff, cg, d)
+        k2 = dyn(y + dt/2 * k1, w_cmd, eff, cg, d)
+        k3 = dyn(y + dt/2 * k2, w_cmd, eff, cg, d)
+        k4 = dyn(y + dt * k3, w_cmd, eff, cg, d)
         y = y + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
     return y
 
@@ -176,7 +170,7 @@ def run_case(fault=0, dist_on=False, ftc=True):
             crash = True
             break
         if k < n:
-            y = plant_step(y, w_cmd, eff, no_payload(), dist(t, dist_on))
+            y = plant_step(y, w_cmd, eff, np.zeros(2), dist(t, dist_on))
     return np.array(data), crash
 
 

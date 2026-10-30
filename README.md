@@ -3,7 +3,7 @@
 Simulation of a hexacopter hovering at 10 m that loses a motor and recovers. Two approaches are compared:
 
 - **Control re-allocation:** cascaded PID + weighted control allocation. The fault is assumed known immediately.
-- **ADRC:** active disturbance rejection control. The controller is not told about the fault and treats it, along with an unknown off-centre payload, as a disturbance.
+- **ADRC:** active disturbance rejection control. The controller is not told about the fault and treats it, along with an unknown centre-of-gravity offset, as a disturbance.
 
 **Simulation videos (ROS 2 + RViz):** [Google Drive folder](https://drive.google.com/drive/folders/1Yvr0sd7mPDu3fAa-QyxSlOduzrMHX4zT?usp=sharing)
 
@@ -25,7 +25,7 @@ python python/hexa_ftc.py
 python python/hexa_adrc.py
 ```
 
-`hexa_ftc.py` runs the no-fault, disturbance and motor 1–6 failure cases. `hexa_adrc.py` runs the fault-severity sweep, the payload placement study and the noise check, which takes a few minutes.
+`hexa_ftc.py` runs the no-fault, disturbance and motor 1–6 failure cases. `hexa_adrc.py` runs the fault-severity sweep, the CG location study and the noise check, which takes a few minutes.
 
 ## ROS 2
 
@@ -40,13 +40,13 @@ Useful launch arguments:
 
 - `fault_motor` (0–6), `fault_eta` (thrust loss 0–1), `fault_time`, `t_end`
 - `controller` (`pid` or `adrc`), `use_ftc` (`false` = fault unknown)
-- `payload_mass`, `payload_r`, `payload_angle`
+- `cg_cm`, `cg_angle` (CG offset and its direction)
 - `disturbance`, `rviz`
 
-Example: fault-blind ADRC with an unknown payload.
+Example: fault-blind ADRC with an unknown CG offset.
 
 ```bash
-ros2 launch hexa_ftc_ros hexa_ftc.launch.py controller:=adrc use_ftc:=false fault_motor:=1 fault_time:=5.0 t_end:=15.0 payload_mass:=0.2 payload_r:=0.1 payload_angle:=90
+ros2 launch hexa_ftc_ros hexa_ftc.launch.py controller:=adrc use_ftc:=false fault_motor:=1 fault_time:=5.0 t_end:=15.0 cg_cm:=4.0 cg_angle:=90
 ```
 
 On WSL, run `ros2 daemon stop && ros2 daemon start` first if the simulation does not start (the nodes do not find each other).

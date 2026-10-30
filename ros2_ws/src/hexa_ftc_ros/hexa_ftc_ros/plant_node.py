@@ -1,4 +1,4 @@
-# hexacopter plant: dynamics, motor fault, payload, disturbance and the rviz scene
+# hexacopter plant: dynamics, motor fault, CG offset, disturbance and the rviz scene
 # the plant sends the state, waits for the motor command, then does one step
 import os
 import time
@@ -77,9 +77,8 @@ class Plant(Node):
         self.declare_parameter("fault_eta", 1.0)
         self.declare_parameter("disturbance", False)
         self.declare_parameter("t_end", h.t_end)
-        self.declare_parameter("payload_mass", 0.0)
-        self.declare_parameter("payload_r", 0.0)
-        self.declare_parameter("payload_angle", 0.0)
+        self.declare_parameter("cg_cm", 0.0)
+        self.declare_parameter("cg_angle", 0.0)
         self.declare_parameter("controller", "pid")
         self.declare_parameter("use_ftc", True)
         self.declare_parameter("out_dir", "results_ros")
@@ -92,9 +91,8 @@ class Plant(Node):
         self.eta = self.get_parameter("fault_eta").value
         self.dist_on = self.get_parameter("disturbance").value
         self.t_end = self.get_parameter("t_end").value
-        self.pl_mass = self.get_parameter("payload_mass").value
-        self.pl_r = self.get_parameter("payload_r").value
-        self.pl_ang = self.get_parameter("payload_angle").value
+        self.cg_r = self.get_parameter("cg_cm").value / 100
+        self.cg_ang = self.get_parameter("cg_angle").value
         self.ctrl = self.get_parameter("controller").value
         self.use_ftc = self.get_parameter("use_ftc").value
         self.out_dir = self.get_parameter("out_dir").value
@@ -131,8 +129,8 @@ class Plant(Node):
         self.create_subscription(Float64MultiArray, "/motor_cmd", self.cmd_cb, 10)
         self.create_timer(h.Ts, self.step)
         self.create_timer(0.05, self.publish_viz)
-        self.get_logger().info("plant started: motor %d, eta %.2f, payload %.2f kg at %.2f m / %.0f deg"
-                               % (self.fault_motor, self.eta, self.pl_mass, self.pl_r, self.pl_ang))
+        self.get_logger().info("plant started: motor %d, eta %.2f, CG offset %.1f cm at %.0f deg"
+                               % (self.fault_motor, self.eta, 100 * self.cg_r, self.cg_ang))
 
     def fault_now(self):
         if self.fault_motor > 0 and self.t >= self.t_fault:
@@ -191,8 +189,8 @@ class Plant(Node):
             self.save()
             self.t_done = time.time()
             return
-        pl = ha.payload(self.pl_r, self.pl_ang, self.pl_mass * min(self.t / ha.t_ramp, 1.0))
-        self.y = h.plant_step(self.y, self.w_cmd, eff, pl, h.dist(self.t, self.dist_on))
+        cg = ha.cg_offset(self.cg_r, self.cg_ang) * min(self.t / ha.t_ramp, 1.0)
+        self.y = h.plant_step(self.y, self.w_cmd, eff, cg, h.dist(self.t, self.dist_on))
         self.k += 1
         self.t = self.k * h.Ts
         self.hist.append((self.t, self.y[6], np.rad2deg(self.y[0]), np.rad2deg(self.y[1])))
@@ -250,10 +248,11 @@ class Plant(Node):
             arrow.points = [Point(x=float(x), y=float(y), z=0.05), Point(x=float(x), y=float(y), z=0.05 + max(L, 0.011))]
             out.append(arrow)
         out.append(line(B, "arms", 0, arms, (0.3, 0.3, 0.33, 1.0), 0.022, Marker.LINE_LIST))
-        if self.pl_mass > 0:
-            pos, J, mass = ha.payload(self.pl_r, self.pl_ang, 1.0)
-            s = 0.05 + 0.1 * min(self.t / ha.t_ramp, 1.0)
-            out.append(marker(B, "payload", 0, Marker.CUBE, YELLOW, (s, s, s), (-pos[1], pos[0], -0.06 - s/2)))
+        if self.cg_r > 0:
+            # CG: lever plane (roll, pitch) = (y, -x)
+            c = ha.cg_offset(self.cg_r, self.cg_ang) * min(self.t / ha.t_ramp, 1.0)
+            out.append(marker(B, "cg", 0, Marker.SPHERE, YELLOW, (0.045, 0.045, 0.045), (-c[1], c[0], -0.06)))
+            out.append(text(B, "cg", 1, "CG", (-c[1], c[0], -0.13), 0.06, YELLOW))
         return out
 
     def hud_markers(self):
@@ -272,13 +271,11 @@ class Plant(Node):
         if self.t_done is not None:
             st += "   (finished)"
         out.append(text(W, "hud", 0, st, (chart_x, 0, hud_z + 0.6), 0.13))
-        if self.pl_mass > 0:
-            if self.pl_r > 0:
-                where = "%.0f cm %s" % (100 * self.pl_r, ha.dir_name(self.pl_ang))
-            else:
-                where = "at the centre"
-            out.append(text(W, "hud", 1, "PAYLOAD %.2f kg, %s" % (self.pl_mass, where),
-                            (chart_x, 0, hud_z + 0.85), 0.16, YELLOW))
+        if self.cg_r > 0:
+            where = "CG %.1f cm %s" % (100 * self.cg_r, ha.dir_name(self.cg_ang))
+        else:
+            where = "CG at the centre"
+        out.append(text(W, "hud", 1, where, (chart_x, 0, hud_z + 0.85), 0.16, YELLOW))
         speeds = "motor speed (rad/s):  " + "   ".join("M%d %3d" % (i+1, round(self.y[8+i])) for i in range(6))
         out.append(text(W, "hud", 2, speeds, (chart_x, 0, hud_z + 0.4), 0.09, GREY))
         ang = np.rad2deg(self.y[:3])
@@ -347,8 +344,8 @@ class Plant(Node):
         else:
             name = "no_fault_disturbance" if self.dist_on else "no_fault"
             title = "ROS2: no failure"
-        if self.pl_mass > 0:
-            name += "_payload_r%02d_a%03d" % (round(100 * self.pl_r), round(self.pl_ang) % 360)
+        if self.cg_r > 0:
+            name += "_cg%02dmm_a%03d" % (round(1000 * self.cg_r), round(self.cg_ang) % 360)
         if self.ctrl != "pid" or not self.use_ftc:
             name += "_" + self.ctrl + ("" if self.use_ftc else "_blind")
         h.save_csv(D, os.path.join(self.out_dir, name + ".csv"))

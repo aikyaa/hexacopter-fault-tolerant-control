@@ -12,7 +12,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 # launch argument name, default value, type
 args = [("fault_motor", "1", int), ("fault_time", "2.0", float), ("fault_eta", "1.0", float),
         ("disturbance", "false", bool), ("t_end", "10.0", float),
-        ("payload_mass", "0.0", float), ("payload_r", "0.0", float), ("payload_angle", "0.0", float),
+        ("cg_cm", "0.0", float), ("cg_angle", "0.0", float),
         ("controller", "pid", str), ("use_ftc", "true", bool), ("out_dir", "results_ros", str),
         ("rviz", "true", bool), ("start_delay", "3.0", float), ("slowmo", "0.15", float),
         ("hold_time", "0.0", float)]

@@ -1,6 +1,6 @@
 # Hexacopter fault tolerant control with ADRC (TD + LESO), following
 # "Active Disturbance Rejection based approach for FTC of a Quadcopter" (ETAAV 2025)
-# the controller is not told about the motor fault or the payload,
+# the controller is not told about the motor fault or the CG offset,
 # the LESO estimates both as one total disturbance
 import os
 import numpy as np
@@ -13,10 +13,9 @@ try:
 except ImportError:
     import hexa_ftc as h
 
-t_fault = 5.0      # after the payload is picked up
+t_fault = 5.0      # after the CG offset is ramped in
 t_end = 15.0
-mp = 0.2           # payload mass (kg)
-t_ramp = 2.0       # payload pick-up time (s)
+t_ramp = 2.0       # the CG offset is ramped in over this time (s), so hover starts trimmed
 fault_motor = 1
 
 # direction of each arm in the roll/pitch lever plane (deg)
@@ -120,14 +119,12 @@ class Loop:
         return 0.0
 
 
-def payload(r, ang, mass):
-    # point mass at radius r in direction ang (deg, same frame as arm_ang)
-    pos = r * np.array([np.cos(np.deg2rad(ang)), np.sin(np.deg2rad(ang))])
-    J = np.array([h.Jxx + mass * pos[0]**2, h.Jyy + mass * pos[1]**2, h.Jzz + mass * r**2])
-    return pos * mass, J, h.m + mass
+def cg_offset(r, ang):
+    # CG offset r (m) in direction ang (deg, same frame as arm_ang)
+    return r * np.array([np.cos(np.deg2rad(ang)), np.sin(np.deg2rad(ang))])
 
 
-def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, mass=mp, noise=0.0):
+def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, noise=0.0):
     y = h.start_state()
     loop = Loop(ctrl, y)
     rng = np.random.default_rng(0)
@@ -149,7 +146,7 @@ def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, mass=mp, noise=0.0
             crash = True
             break
         if k < n:
-            y = h.plant_step(y, w_cmd, eff, payload(r, ang, mass * min(t / t_ramp, 1)))
+            y = h.plant_step(y, w_cmd, eff, cg_offset(r, ang) * min(t / t_ramp, 1))
     return np.array(data), crash
 
 
@@ -183,12 +180,12 @@ def run_args(args):
 
 
 def max_offset(args):
-    # bisection for the largest payload radius that still recovers
+    # bisection for the largest CG offset that still recovers
     setup, ang = args
-    lo, hi = 0.0, 0.33
+    lo, hi = 0.0, 0.2
     if not run_metrics(dict(SETUPS[setup], ang=ang, r=lo))["ok"]:
         return 0.0
-    for i in range(7):
+    for i in range(9):
         mid = (lo + hi) / 2
         if run_metrics(dict(SETUPS[setup], ang=ang, r=mid))["ok"]:
             lo = mid
@@ -229,12 +226,12 @@ if __name__ == "__main__":
     os.makedirs(folder, exist_ok=True)
     pool = Pool()
 
-    # 1) fault severity, motor 1, no payload
+    # 1) fault severity, motor 1, no CG offset
     etas = [0.0, 0.25, 0.5, 0.75, 1.0]
     jobs = []
     for e in etas:
         for s in SETUPS:
-            jobs.append(dict(SETUPS[s], eta=e, mass=0.0))
+            jobs.append(dict(SETUPS[s], eta=e))
     runs = pool.map(run_args, jobs)
     rows = []
     fig, ax = plt.subplots(3, len(etas), figsize=(20, 9), sharex=True)
@@ -266,48 +263,48 @@ if __name__ == "__main__":
     write_csv(os.path.join(folder, "fault_sweep.csv"), rows)
     print("fault sweep done")
 
-    # 2) payload 0.1 m from the centre in 12 directions, motor 1 fails completely
+    # 2) CG 1.5 cm off the centre in 12 directions, motor 1 fails completely
     angs = list(range(0, 360, 30))
-    cases = [("centre", 0.0, 0.0)] + [(dir_name(a), 0.1, float(a)) for a in angs]
+    r_cg = 0.04
+    cases = [("centre", 0.0, 0.0)] + [(dir_name(a), r_cg, float(a)) for a in angs]
     jobs = []
     labels = []
     for name, r, a in cases:
         for s in SETUPS:
             jobs.append(dict(SETUPS[s], r=r, ang=a))
-            labels.append({"payload": name, "angle_deg": a, "r_m": r, "setup": NAMES[s]})
+            labels.append({"cg": name, "angle_deg": a, "r_cm": 100 * r, "setup": NAMES[s]})
     res = pool.map(run_metrics, jobs)
     rows = [{**labels[i], **res[i]} for i in range(len(jobs))]
-    write_csv(os.path.join(folder, "payload_locations.csv"), rows)
-    print("payload locations done")
+    write_csv(os.path.join(folder, "cg_locations.csv"), rows)
+    print("cg locations done")
 
-    # 3) largest payload offset that still recovers, per direction
+    # 3) largest CG offset that still recovers, per direction
     env = pool.map(max_offset, [(s, float(a)) for s in SETUPS for a in angs])
     env = np.array(env).reshape(len(SETUPS), len(angs))
-    with open(os.path.join(folder, "payload_envelope.csv"), "w") as f:
-        f.write("angle_deg,direction," + ",".join(s + "_max_r_m" for s in SETUPS) + "\n")
+    env = 100 * env      # cm
+    with open(os.path.join(folder, "cg_envelope.csv"), "w") as f:
+        f.write("angle_deg,direction," + ",".join(s + "_max_cg_cm" for s in SETUPS) + "\n")
         for j, a in enumerate(angs):
-            f.write("%d,%s," % (a, dir_name(a)) + ",".join("%.3f" % v for v in env[:, j]) + "\n")
+            f.write("%d,%s," % (a, dir_name(a)) + ",".join("%.2f" % v for v in env[:, j]) + "\n")
     th = np.deg2rad(angs + [angs[0]])
     fig = plt.figure(figsize=(7, 7))
     ax = fig.add_subplot(projection="polar")
     for k, s in enumerate(SETUPS):
         ax.plot(th, np.r_[env[k], env[k, 0]], STYLE[s], marker="o", label=NAMES[s])
-    for i, a in enumerate(arm_ang):
-        failed = i + 1 == fault_motor
-        ax.annotate("M%d%s" % (i+1, " (failed)" if failed else ""), (np.deg2rad(a), 0.36),
-                    ha="center", color="r" if failed else "k")
-    ax.set_ylim(0, 0.35)
-    ax.set_title("Largest payload offset (m) that still recovers\nmotor %d total failure, %.1f kg payload"
-                 % (fault_motor, mp))
+    # motor names on the angle axis
+    ax.set_xticks(np.deg2rad(arm_ang))
+    ax.set_xticklabels(["M%d%s" % (i+1, " (failed)" if i + 1 == fault_motor else "") for i in range(6)])
+    ax.set_ylim(0, 20)
+    ax.set_title("Largest CG offset (cm) that still recovers\nmotor %d total failure" % fault_motor)
     ax.legend(loc="lower left", bbox_to_anchor=(-0.1, -0.15), fontsize=8)
     fig.tight_layout()
-    fig.savefig(os.path.join(folder, "payload_envelope.png"), dpi=110)
+    fig.savefig(os.path.join(folder, "cg_envelope.png"), dpi=110)
     plt.close(fig)
     print("envelope done")
 
-    # 4) time response for a few payload places + LESO disturbance estimate
-    show = [("centre", 0.0, 0.0), ("toward M1 (failed)", 0.1, 180.0),
-            ("toward M2", 0.1, 0.0), ("between M4/M6", 0.1, 90.0)]
+    # 4) time response for a few CG places + LESO disturbance estimate
+    show = [("centre", 0.0, 0.0), ("toward M1 (failed)", r_cg, 180.0),
+            ("toward M2", r_cg, 0.0), ("between M4/M6", r_cg, 90.0)]
     jobs = []
     for name, r, a in show:
         for s in SETUPS:
@@ -327,7 +324,7 @@ if __name__ == "__main__":
                 pdot = np.gradient(D[:, 4], h.Ts)
                 ax[2, j].plot(D[:, 0], pdot - D[:, 15] / h.Jxx, label="actual")
                 ax[2, j].plot(D[:, 0], D[:, 16], "--", label="LESO estimate z3")
-        ax[0, j].set_title("payload %s (r = %.2f m)" % (name, r))
+        ax[0, j].set_title("CG %s (%.1f cm)" % (name, 100 * r))
         ax[0, j].set_ylim(0, 60)
         ax[1, j].set_ylim(9.0, 10.5)
         ax[2, j].set_ylim(-100, 250)
@@ -341,14 +338,14 @@ if __name__ == "__main__":
     ax[1, 0].set_ylabel("z (m)")
     ax[2, 0].set_ylabel("roll disturbance (rad/s^2)\nADRC (fault unknown)")
     fig.tight_layout()
-    fig.savefig(os.path.join(folder, "payload_response.png"), dpi=110)
+    fig.savefig(os.path.join(folder, "cg_response.png"), dpi=110)
     plt.close(fig)
 
     # 5) sensor noise, motor 1 total failure
     rows = []
     for noise in [0.0, 0.3, 1.0]:
         for s in ["pid_realloc", "adrc_blind"]:
-            D, crash = run_case(**SETUPS[s], mass=0.0, noise=noise)
+            D, crash = run_case(**SETUPS[s], noise=noise)
             hover = D[(D[:, 0] > 1) & (D[:, 0] < t_fault)]
             jitter = float(np.std(np.diff(hover[:, 9:15], axis=0)))
             rows.append({"setup": NAMES[s], "noise_deg": noise, "motor_jitter_radps": jitter, **metrics(D, crash)})
