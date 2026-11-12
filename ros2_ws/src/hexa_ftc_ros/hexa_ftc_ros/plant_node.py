@@ -17,10 +17,10 @@ from hexa_ftc_ros import hexa_adrc as ha
 s3 = np.sqrt(3) / 2
 motor_xy = h.l * np.array([[0, -1], [0, 1], [s3, 0.5], [-s3, -0.5], [s3, -0.5], [-s3, 0.5]])
 
-# chart behind the drone: time goes from y0 to y1
+# chart behind the drone: time goes from y0 (left on screen) to y1 (right)
 chart_x = -1.6
-chart_y0 = 2.6
-chart_y1 = -2.6
+chart_y0 = -2.6
+chart_y1 = 2.6
 # (title, bottom z, top z, value min, value max, ticks, unit)
 z0 = h.z_ref
 panels = [("roll / pitch angle (deg)", z0 + 0.05, z0 + 1.25, -60.0, 60.0, [-60, -30, 0, 30, 60], "deg"),
@@ -310,8 +310,8 @@ class Plant(Node):
                 grid += [(x, ty(t), zb), (x, ty(t), zt)]
             out.append(line(W, "chart_grid", k, grid, (1, 1, 1, 0.12), 0.006, Marker.LINE_LIST))
             for j, v in enumerate(ticks):
-                out.append(text(W, "chart_vlbl%d" % k, j, "%g %s" % (v, unit), (x, chart_y0 + 0.32, zv(v)), 0.085, GREY))
-            out.append(text(W, "chart_title", k, title, (x, chart_y0 - 0.75, zt + 0.06), 0.095))
+                out.append(text(W, "chart_vlbl%d" % k, j, "%g %s" % (v, unit), (x, chart_y0 - 0.32, zv(v)), 0.085, GREY))
+            out.append(text(W, "chart_title", k, title, (x, chart_y0 + 0.75, zt + 0.06), 0.095))
             if self.fault_motor > 0:
                 out.append(line(W, "chart_fault", k, [(x, ty(self.t_fault), zb), (x, ty(self.t_fault), zt)], ORANGE, 0.01))
             # traces: altitude in the bottom panel, roll and pitch in the top one
@@ -326,8 +326,8 @@ class Plant(Node):
         for j, t in enumerate(t_ticks):
             out.append(text(W, "chart_tlbl", j, "%g" % t, (x, ty(t), zb - 0.12), 0.085, GREY))
         out.append(text(W, "chart_tname", 0, "time (s)", (x, 0, zb - 0.27), 0.095))
-        out.append(text(W, "chart_legend", 0, "roll", (x, chart_y1 + 0.25, hud_z - 0.08), 0.085, GREEN))
-        out.append(text(W, "chart_legend", 1, "pitch", (x, chart_y1 + 0.25, hud_z - 0.22), 0.085, BLUE))
+        out.append(text(W, "chart_legend", 0, "roll", (x, chart_y1 - 0.25, hud_z - 0.08), 0.085, GREEN))
+        out.append(text(W, "chart_legend", 1, "pitch", (x, chart_y1 - 0.25, hud_z - 0.22), 0.085, BLUE))
         if self.fault_motor > 0:
             out.append(text(W, "chart_fault_lbl", 0, "motor %d fails" % self.fault_motor,
                             (x, ty(self.t_fault), hud_z), 0.08, ORANGE))
