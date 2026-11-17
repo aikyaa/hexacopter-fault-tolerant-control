@@ -141,7 +141,8 @@ def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, noise=0.0):
             y_meas[3:6] += np.deg2rad(5 * noise) * rng.standard_normal(3)
             y_meas[6] += 0.01 * noise * rng.standard_normal()
         w_cmd, M_des = loop.step(y_meas, eff if ftc else np.ones(6))
-        data.append(np.r_[t, y, loop.M_exp[0], loop.roll_dist()])
+        data.append(np.r_[t, y, loop.M_exp[0], loop.roll_dist(), eff * h.kf * y[8:14]**2,
+                          M_des[0], (h.G @ (eff * y[8:14]**2))[0]])
         if h.crashed(y):
             crash = True
             break
@@ -261,6 +262,70 @@ if __name__ == "__main__":
     fig.savefig(os.path.join(folder, "fault_sweep.png"), dpi=110)
     plt.close(fig)
     write_csv(os.path.join(folder, "fault_sweep.csv"), rows)
+
+    # motor thrusts at total loss of motor 1
+    f_max = h.kf * h.w_max**2
+    fig, ax = plt.subplots(1, len(SETUPS), figsize=(20, 4.5), sharey=True)
+    for k, s in enumerate(SETUPS):
+        D, crash = runs[len(SETUPS) * (len(etas) - 1) + k]
+        for i in range(6):
+            ax[k].plot(D[:, 0], D[:, 17+i], label="M%d" % (i+1))
+        ax[k].axhline(f_max, color="k", ls="--", lw=1, label="motor max")
+        ax[k].axhline(h.m * h.g / 6, color="k", ls=":", lw=1, label="hover share (W/6)")
+        ax[k].axvline(t_fault, color="r", lw=1)
+        ax[k].set_title(NAMES[s] + (" (crash)" if crash else ""), fontsize=9)
+        ax[k].set_xlabel("time (s)")
+        ax[k].grid(True)
+    ax[0].set_ylabel("motor thrust (N)")
+    ax[0].legend(fontsize=7, ncol=2)
+    fig.suptitle("Motor thrusts, motor 1 total failure at t = %.0f s (T/W = %.0f)" % (t_fault, h.twr))
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "fault_thrust.png"), dpi=110)
+    plt.close(fig)
+
+    # peak tilt, altitude dip and settle time against fault size
+    fig, ax = plt.subplots(1, 3, figsize=(18, 4.5))
+    for s in SETUPS:
+        loss, tilt, dip, settle = [], [], [], []
+        for r in rows:
+            if r["setup"] == NAMES[s] and r["eta"] > 0 and not r["crashed"]:
+                loss.append(100 * r["eta"])
+                tilt.append(r["max_tilt_deg"])
+                dip.append(100 * (h.z_ref - r["min_z_m"]))
+                settle.append(r["settle_s"])
+        if loss:
+            ax[0].plot(loss, tilt, STYLE[s], marker="o", label=NAMES[s])
+            ax[1].plot(loss, dip, STYLE[s], marker="o")
+            ax[2].plot(loss, settle, STYLE[s], marker="o")
+    ax[0].set_ylabel("peak tilt after the fault (deg)")
+    ax[1].set_ylabel("altitude dip (cm)")
+    ax[2].set_ylabel("settle time (s)")
+    for a in ax:
+        a.set_xlabel("motor 1 thrust loss (%)")
+        a.set_xticks([25, 50, 75, 100])
+        a.grid(True)
+    ax[0].legend(fontsize=7, title="PID (fault unknown) crashes at every level", title_fontsize=7)
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "fault_metrics.png"), dpi=110)
+    plt.close(fig)
+
+    # desired vs produced roll torque at total loss: what the healthy mixer wastes
+    fig, ax = plt.subplots(1, 2, figsize=(14, 4.5), sharey=True)
+    for k, s in enumerate(["adrc_blind", "adrc_realloc"]):
+        D, crash = runs[len(SETUPS) * (len(etas) - 1) + list(SETUPS).index(s)]
+        ax[k].plot(D[:, 0], D[:, 23], label="desired roll torque (controller)")
+        ax[k].plot(D[:, 0], D[:, 24], "--", label="roll torque the motors produce")
+        ax[k].axvline(t_fault, color="r", lw=1)
+        ax[k].set_xlim(4, 9)
+        ax[k].set_title(NAMES[s], fontsize=10)
+        ax[k].set_xlabel("time (s)")
+        ax[k].grid(True)
+        ax[k].legend(fontsize=8)
+    ax[0].set_ylabel("roll torque (N m)")
+    fig.suptitle("Motor 1 total failure: desired vs produced roll torque")
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "torque_tracking.png"), dpi=110)
+    plt.close(fig)
     print("fault sweep done")
 
     # 2) CG 1.5 cm off the centre in 12 directions, motor 1 fails completely
@@ -310,7 +375,7 @@ if __name__ == "__main__":
         for s in SETUPS:
             jobs.append(dict(SETUPS[s], r=r, ang=a))
     runs = pool.map(run_args, jobs)
-    fig, ax = plt.subplots(3, len(show), figsize=(20, 10), sharex=True)
+    fig, ax = plt.subplots(4, len(show), figsize=(20, 13), sharex=True)
     i = 0
     for j, (name, r, a) in enumerate(show):
         for s in SETUPS:
@@ -324,30 +389,102 @@ if __name__ == "__main__":
                 pdot = np.gradient(D[:, 4], h.Ts)
                 ax[2, j].plot(D[:, 0], pdot - D[:, 15] / h.Jxx, label="actual")
                 ax[2, j].plot(D[:, 0], D[:, 16], "--", label="LESO estimate z3")
+                for m_ in range(6):
+                    ax[3, j].plot(D[:, 0], D[:, 17+m_], label="M%d" % (m_+1))
+                ax[3, j].axhline(f_max, color="k", ls="--", lw=1, label="motor max")
         ax[0, j].set_title("CG %s (%.1f cm)" % (name, 100 * r))
         ax[0, j].set_ylim(0, 60)
         ax[1, j].set_ylim(9.0, 10.5)
         ax[2, j].set_ylim(-100, 250)
         ax[0, j].legend(fontsize=6)
         ax[2, j].legend(fontsize=7)
-        ax[2, j].set_xlabel("time (s)")
+        ax[3, j].legend(fontsize=6, ncol=2)
+        ax[3, j].set_ylim(0, 1.1 * f_max)
+        ax[3, j].set_xlabel("time (s)")
         for a_ in ax[:, j]:
             a_.axvline(t_fault, color="r", lw=1)
             a_.grid(True)
     ax[0, 0].set_ylabel("tilt (deg)")
     ax[1, 0].set_ylabel("z (m)")
     ax[2, 0].set_ylabel("roll disturbance (rad/s^2)\nADRC (fault unknown)")
+    ax[3, 0].set_ylabel("motor thrust (N)\nADRC (fault unknown)")
     fig.tight_layout()
     fig.savefig(os.path.join(folder, "cg_response.png"), dpi=110)
     plt.close(fig)
 
-    # 5) sensor noise, motor 1 total failure
+    # 5) PID vs ADRC as the CG offset grows: without a fault, and with motor 1 failing
+    offsets = [0.001, 0.002, 0.003, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.1, 0.12, 0.15]
+    panels = [("no motor fault, CG toward M2", 0.0, 0.0, ["pid_realloc", "adrc_blind"]),
+              ("motor 1 fails, CG toward M1 (failed side)", 1.0, 180.0, ["pid_realloc", "adrc_blind", "adrc_realloc"]),
+              ("motor 1 fails, CG toward M2 (opposite side)", 1.0, 0.0, ["pid_realloc", "adrc_blind", "adrc_realloc"])]
+    jobs = []
+    keys = []
+    for title, eta, a, setups in panels:
+        for s in setups:
+            for r in offsets:
+                jobs.append(dict(SETUPS[s], eta=eta, r=r, ang=a))
+                keys.append((title, s, r))
+    res = pool.map(run_metrics, jobs)
     rows = []
+    fig, ax = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
+    for k, (title, eta, a, setups) in enumerate(panels):
+        for s in setups:
+            tilt = []
+            for i in range(len(jobs)):
+                if keys[i][0] == title and keys[i][1] == s:
+                    m_ = res[i]
+                    peak = m_["pre_tilt_deg"]
+                    if not np.isnan(m_["max_tilt_deg"]):
+                        peak = max(peak, m_["max_tilt_deg"])
+                    tilt.append(min(peak, 90))
+                    case = "no fault" if eta == 0 else "M1 fails"
+                    rows.append({"case": case, "cg_angle_deg": a, "cg_cm": 100 * keys[i][2], "setup": NAMES[s], **m_})
+            label = "PID" if eta == 0 and s == "pid_realloc" else ("ADRC" if eta == 0 else NAMES[s])
+            ax[k].semilogx(100 * np.array(offsets), tilt, STYLE[s], marker="o", label=label)
+        ax[k].axhline(90, color="k", lw=1)
+        ax[k].text(0.11, 84, "crash", fontsize=8)
+        ax[k].set_title(title, fontsize=10)
+        ax[k].set_xlabel("CG offset (cm)")
+        ax[k].grid(True, which="both")
+        ax[k].legend(fontsize=7)
+    ax[0].set_ylabel("peak tilt over the run (deg)")
+    ax[0].set_ylim(0, 95)
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "cg_pid_vs_adrc.png"), dpi=110)
+    plt.close(fig)
+    write_csv(os.path.join(folder, "cg_pid_vs_adrc.csv"), rows)
+    print("pid vs adrc done")
+
+    # 6) sensor noise, motor 1 total failure
+    rows = []
+    noise_runs = {}
     for noise in [0.0, 0.3, 1.0]:
         for s in ["pid_realloc", "adrc_blind"]:
             D, crash = run_case(**SETUPS[s], noise=noise)
+            noise_runs[(noise, s)] = (D, crash)
             hover = D[(D[:, 0] > 1) & (D[:, 0] < t_fault)]
             jitter = float(np.std(np.diff(hover[:, 9:15], axis=0)))
             rows.append({"setup": NAMES[s], "noise_deg": noise, "motor_jitter_radps": jitter, **metrics(D, crash)})
     write_csv(os.path.join(folder, "noise.csv"), rows)
+    fig, ax = plt.subplots(2, 2, figsize=(16, 8), sharex=True)
+    for j, noise in enumerate([0.3, 1.0]):
+        for s in ["pid_realloc", "adrc_blind"]:
+            D, crash = noise_runs[(noise, s)]
+            tilt = np.rad2deg(np.maximum(abs(D[:, 1]), abs(D[:, 2])))
+            ax[0, j].plot(D[:, 0], tilt, STYLE[s], label=NAMES[s] + (" (crash)" if crash else ""))
+            ax[1, j].plot(D[:, 0], D[:, 11], STYLE[s], lw=0.8, label=NAMES[s])
+        ax[1, j].axhline(h.w_max, color="k", ls="--", lw=1, label="motor max")
+        ax[0, j].set_title("attitude noise %.1f deg, motor 1 total failure" % noise)
+        ax[0, j].set_ylim(0, 60)
+        ax[1, j].set_xlabel("time (s)")
+        ax[0, j].legend(fontsize=7)
+        ax[1, j].legend(fontsize=7)
+        for a in ax[:, j]:
+            a.axvline(t_fault, color="r", lw=1)
+            a.grid(True)
+    ax[0, 0].set_ylabel("tilt (deg)")
+    ax[1, 0].set_ylabel("motor 3 speed (rad/s)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, "noise_response.png"), dpi=110)
+    plt.close(fig)
     print("done, results in", folder)

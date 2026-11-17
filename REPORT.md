@@ -15,13 +15,15 @@ Keep a hexacopter hovering after one motor fails, using two approaches:
 |---|---|
 | Mass, arm length | 0.95 kg, 0.33 m |
 | Inertia (Jxx, Jyy, Jzz) | 6.89e-3, 6.89e-3, 3.44e-2 kg·m² |
-| Motors | kf = 3.13e-4, km = 7.5e-6, limit 110 rad/s, time constant 0.1 s, hover speed 70.4 rad/s |
+| Motors | kf = 3.13e-4, km = 7.5e-6, time constant 0.1 s, hover speed 70.4 rad/s |
+| Motor limit | thrust-to-weight ratio 2 with all six motors: 99.6 rad/s, 3.11 N per motor |
 | Control loop | 100 Hz |
 | Scenario | Hover at 10 m, then one motor fails |
 
+- **Motor limit:** each motor can give at most 2 × weight / 6 = 3.11 N. After one motor fails, the other five can give at most 1.67 × the weight.
 - **Controller:** a PX4-style PID cascade. Attitude uses angle P → rate PI; altitude uses position P → climb-rate PID. It outputs the desired moments M = [τφ, τθ, τψ, T].
-- **Allocation:** M = G·ω², solved with a weighted pseudo-inverse, Ws = diag(0.3, 0.3, 0.15, 0.25). After a fault, the failed motor's column of G is set to zero. If a motor would saturate, a bounded least-squares solve is used instead.
-- **Controllability:** the controllability matrix has rank 4 for every single-motor failure, so the vehicle stays controllable. Every failure leaves yaw torque in **one direction only**, and roll or pitch also lose one direction.
+- **Allocation:** M = G·ω², solved with a weighted pseudo-inverse, Ws = diag(0.3, 0.3, 0.15, 0.25). After a fault, the failed motor's column of G is set to zero. If a motor would go past its limit, a bounded least-squares solve is used instead.
+- **Controllability:** the controllability matrix has rank 4 for every single-motor failure, so the vehicle stays controllable. Every failure leaves yaw torque in **one direction only**, and roll or pitch also lose one direction. With M1 failed: roll 0 to +1.54 N·m, pitch ±0.89 N·m, yaw 0 to +0.22 N·m (healthy: ±1.54, ±1.78, ±0.22).
 
 ![Control authority](python/results/control_authority.png)
 
@@ -35,11 +37,11 @@ Keep a hexacopter hovering after one motor fails, using two approaches:
 | M3 – M6 | flips after 0.22 s | 15° / 24° | 9.93 m | 1.3 – 1.7 s | ±15° |
 
 - With the normal mixer, the vehicle flips 0.22 s after any motor failure. With re-allocation, every case returns to level hover.
-- The allocator also turns off the **opposite motor** (for example, M2 when M1 fails). The remaining four run at 86 rad/s, which leaves about 22% headroom below the limit.
+- The allocator also turns off the **opposite motor** (for example, M2 when M1 fails). The remaining four settle at 86 rad/s (2.32 N each, 75% of their maximum thrust). During the transient they peak at 97 rad/s, just under the 99.6 rad/s limit.
 - **Yaw is given up.** Only one direction of yaw torque is left, so the heading settles about 15° off. Roll, pitch and altitude are kept, which is the intended trade-off.
 - Peak roll for M1 matches the thesis (27.4° here, about 28° there).
 
-Motor 1 failure in detail: angles, rates, altitude, motor speeds and torques. The dotted line is the same failure without re-allocation.
+Motor 1 failure in detail. The bottom row shows each motor's thrust against its limit, and the total thrust against the weight. The dotted line is the same failure without re-allocation.
 
 ![Motor 1 failure](python/results/motor1_fault.png)
 
@@ -70,17 +72,29 @@ Code: [python/hexa_adrc.py](python/hexa_adrc.py). Results: [python/results_adrc/
 
 Peak tilt after a motor 1 fault, by thrust loss:
 
-| Thrust loss of M1 | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** |
-|---|---|---|---|
-| 25% | crash | 11.4° | **7.2°** |
-| 50% | crash | 20.8° | **15.8°** |
-| 75% | crash | 23.1° | **25.9°** |
-| 100% | crash | 27.4° | **38.3°** |
+| Thrust loss of M1 | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc |
+|---|---|---|---|---|
+| 25% | crash | 11.4° | **7.2°** | 3.4° |
+| 50% | crash | 20.8° | **15.8°** | 5.7° |
+| 75% | crash | 23.0° | **25.9°** | 6.9° |
+| 100% | crash | 27.4° | **33.9°** | 11.5° |
 
 - Fault-blind PID crashes even at 25% thrust loss. **Fault-blind ADRC recovers at every level.**
 - Up to 50% loss, it even does better than re-allocation, which knows the fault.
-- At total loss, ADRC dips 44 cm (re-allocation: 7 cm) and settles in 2.5 s (re-allocation: 1.6 s).
+- At total loss, ADRC dips 38 cm (re-allocation: 7 cm), settles in 2.2 s (re-allocation: 1.6 s) and its heading drifts 52° (re-allocation: 16°).
 - ADRC also ends up turning off M2, the configuration re-allocation chooses on purpose. ADRC gets there by itself, through the observer.
+
+![Fault metrics against fault size](python/results_adrc/fault_metrics.png)
+
+The same comparison as curves. Fault-blind ADRC's tilt and settle time cross the thesis method's between 50% and 75% loss, but its altitude dip is larger at every level: the altitude loop is slow and has to estimate the lost thrust.
+
+![Motor thrusts at total loss](python/results_adrc/fault_thrust.png)
+
+Motor thrusts at total loss of M1. Fault-blind ADRC briefly drives M3–M6 right up to the 3.11 N limit, while M2 drops, comes back once, then switches off. With the fault known, they peak at 2.7–2.95 N.
+
+![Desired vs produced roll torque](python/results_adrc/torque_tracking.png)
+
+This is what not knowing the fault costs. Fault-blind ADRC settles asking for −1.03 N·m of roll torque while the motors produce zero net torque: the healthy mixer sends part of every request to the dead motor, and the LESO's z₃ grows until it cancels exactly that. With the fault known, the requested and produced torque match, which is why the transient is smaller.
 
 ### Key result 2: CG location matters
 
@@ -88,25 +102,49 @@ Peak tilt after a motor 1 fault, by thrust loss:
 
 Largest CG offset that still recovers after motor 1 fails:
 
-| CG direction | PID, fault unknown | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc |
-|---|---|---|---|---|
-| Away from the failed motor (M2, M3, M6 side) | 0 | ≤ 0.3 cm | **10–15 cm** | ≥ 15.8 cm |
-| Toward M4 or M5 (next to the failed motor) | 0 | ≤ 0.3 cm | **6.1–7.4 cm** | 7.5–7.6 cm |
-| Toward the failed motor (M1) | 0 | ≤ 0.2 cm | **3.5–4.3 cm** | 3.8–4.5 cm |
+| CG direction | PID + re-alloc, fault known | **ADRC, fault unknown** | ADRC + re-alloc |
+|---|---|---|---|
+| Away from the failed motor (toward M2, M3, M6) | 0.3 cm | **9.5–16.3 cm** | 18.0–19.3 cm |
+| Sideways (90°, 270°) | 0.3 cm | **2.6–3.9 cm** | 10.5 cm |
+| Toward M4 or M5 (next to the failed motor) | 0.3 cm | **1.1–1.5 cm** | 4.9–5.0 cm |
+| Toward the failed motor (M1 side) | 0.1–0.2 cm | **0.7–0.8 cm** | 2.5–2.9 cm |
 
-The search stops at 20 cm. Fault-blind PID scores 0 because it crashes from the motor failure alone, even with the CG centred.
+Fault-blind PID scores 0 in every direction: it crashes from the motor failure alone, even with the CG centred.
 
-- **PID cannot handle an unknown CG offset.** Its rate integrator is clamped at about 0.007 N·m, so an offset of more than 1–3 mm tips it over before the fault even happens.
-- **ADRC holds a CG offset level**: with the CG 4 cm off, the tilt before the fault stays under 2°, and it survives the motor failure in 10 of the 12 directions.
-- **The weak spot is a CG on the failed motor's side.** Here knowing the fault barely helps (3.5 cm fault-blind vs 3.8 cm with re-allocation). This is a physical limit: the remaining motors on the far side saturate.
+- **ADRC tolerates a CG offset of several centimetres, PID only millimetres.** PID's rate integrator is clamped at about 0.007 N·m, so it cannot build up the steady torque an offset needs.
+- **Direction matters a lot.** Fault-blind ADRC handles up to 16 cm away from the failed motor, but under 1 cm toward it.
+- **Toward the failed motor, knowing the fault helps** (0.7 cm → 2.5 cm). The thrust margin is thin (T/W = 2), so the effort the healthy mixer wastes on the dead motor matters there.
+- With the CG 4 cm off, fault-blind ADRC survives the motor failure in 5 of the 12 directions, all on the side away from M1.
 
-![CG response and LESO estimate](python/results_adrc/cg_response.png)
+![CG response, LESO estimate and motor thrust](python/results_adrc/cg_response.png)
 
-This plot uses a 4 cm CG offset. The bottom row shows how ADRC works. The LESO estimate z₃ follows the actual roll disturbance: first the CG offset ramping in (about ±55 rad/s²), then the jump when motor 1 fails (about 115–180 rad/s² in the cases that recover). It catches the jump within about 0.2 s, without being told what changed. With the CG toward M1, the disturbance is still estimated correctly, but the motors saturate and the vehicle crashes.
+This plot uses a 4 cm CG offset. The third row shows how ADRC works: the LESO estimate z₃ follows the actual roll disturbance, first the CG offset ramping in (about ±55 rad/s²), then the jump when motor 1 fails. It catches the jump within about 0.2 s, without being told what changed. The bottom row shows why the crashes happen: toward M1 and between M4/M6, the disturbance is still estimated correctly, but two or three motors are pinned at the 3.11 N limit and cannot produce the torque.
+
+### PID vs ADRC as the CG offset grows
+
+![PID vs ADRC with growing CG offset](python/results_adrc/cg_pid_vs_adrc.png)
+
+Peak tilt over the whole run as the CG offset grows from 1 mm to 15 cm (90° = crash):
+
+| Case | PID | **ADRC, fault unknown** | ADRC + re-alloc |
+|---|---|---|---|
+| No motor fault | leans 2° at 1 mm, 25° at 1 cm; crashes from 2 cm | **stays level (only up to 6.6° while the offset ramps in, then back to 0°) up to 15 cm** | – |
+| M1 fails, CG toward M1 | crashes from 0.3 cm | **survives up to 0.5 cm** | survives up to 2 cm |
+| M1 fails, CG toward M2 | no crash up to 1 cm, but stays tilted (10° at 0.5 cm, 25° at 1 cm); crashes from 2 cm | **no crash up to 15 cm (fully level again up to about 11 cm)** | survives up to 15 cm |
+
+- **Without any fault, PID cannot even hold a CG offset.** It settles at a steady lean that grows with the offset, because its integrator cannot build up the needed torque, and it crashes at 2 cm. ADRC levels out completely at every offset tested.
+- **With the CG toward M2,** the offset partly cancels the fault's torque, so ADRC's peak tilt falls from 34° to 14° as the offset grows to 15 cm.
 
 ### Trade-off: sensor noise
 
-With 1° of attitude noise, ADRC still recovers, but its motor commands jitter about **7× more** than PID + re-allocation (1.38 vs 0.19 rad/s). This is the cost of its high observer bandwidth.
+| Attitude noise | PID + re-alloc: motor jitter | ADRC, fault unknown: motor jitter | Survives total M1 loss? |
+|---|---|---|---|
+| 0.3° | 0.06 rad/s | 0.39 rad/s | both |
+| 1.0° | 0.19 rad/s | 1.41 rad/s | **PID yes, ADRC no** |
+
+![Noise response](python/results_adrc/noise_response.png)
+
+ADRC passes about 7× more noise to the motors because of its fast observer. With T/W = 2 there is too little thrust margin left for that, and with 1° of noise it crashes after the fault.
 
 ## 5. ROS 2 implementation
 
@@ -116,7 +154,7 @@ With 1° of attitude noise, ADRC still recovers, but its motor commands jitter a
   - `use_ftc:=true|false` (re-allocation on or off)
   - `fault_motor`, `fault_eta`
   - `cg_cm`, `cg_angle`
-- **Validation:** the ROS runs reproduce the Python results, with the same crash outcomes and attitude traces within 0.001°.
+- **Validation:** the ROS runs reproduce the Python results, with the same crash outcomes and attitude traces within 0.03°.
 
 Results: [ros2_ws/results_ros/](ros2_ws/results_ros/) (re-allocation) and [ros2_ws/results_adrc_ros/](ros2_ws/results_adrc_ros/) (ADRC).
 
@@ -127,8 +165,8 @@ ROS 2 run of fault-blind ADRC with the CG 4 cm toward M2, and motor 1 failing at
 ## 6. Conclusions
 
 - With the fault known, re-allocation recovers from any single motor failure in under 1.7 s, with tilt under 28° and altitude loss under 7 cm. The heading drifts about 15°.
-- **ADRC removes the need to know which motor failed.** It recovers from 25–100% thrust loss of a motor, and it handles an unknown CG offset, which PID cannot.
-- With the fault unknown, ADRC tolerates a CG offset of 10–15 cm away from the failed motor, but only 3.5–4.3 cm toward it. Toward the failed motor, knowing the fault barely helps: the limit there is the thrust of the remaining motors.
+- **ADRC removes the need to know which motor failed.** It recovers from 25–100% thrust loss of a motor, and it holds an unknown CG offset level, which PID cannot even do without a fault.
+- With the fault unknown, ADRC tolerates a CG offset of up to 16 cm away from the failed motor, but under 1 cm toward it. With thrust-to-weight 2 the margin there is thin, and knowing the fault raises it to 2.5 cm.
 - **Limitations:**
   - Re-allocation assumes the fault is detected instantly.
-  - ADRC's high gains make it sensitive to sensor noise.
+  - ADRC's high gains make it sensitive to sensor noise: with T/W = 2 it does not survive 1° of attitude noise plus a total motor failure.

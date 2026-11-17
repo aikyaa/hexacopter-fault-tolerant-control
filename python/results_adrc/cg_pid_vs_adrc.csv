@@ -1,0 +1,113 @@
+case,cg_angle_deg,cg_cm,setup,crashed,pre_tilt_deg,max_tilt_deg,final_tilt_deg,final_yaw_deg,min_z_m,max_motor,settle_s,ok
+no fault,0.000,0.100,PID + re-allocation (fault known - thesis),False,2.161,1.500,0.632,-0.000,10.000,70.698,0.000,True
+no fault,0.000,0.200,PID + re-allocation (fault known - thesis),False,4.332,3.067,3.060,-0.000,10.000,71.004,10.000,True
+no fault,0.000,0.300,PID + re-allocation (fault known - thesis),False,6.522,5.511,5.509,-0.000,10.000,71.365,10.000,False
+no fault,0.000,0.500,PID + re-allocation (fault known - thesis),False,11.006,10.527,10.526,-0.000,10.000,72.267,10.000,False
+no fault,0.000,1.000,PID + re-allocation (fault known - thesis),False,25.536,24.915,24.913,-0.000,10.000,76.718,10.000,False
+no fault,0.000,2.000,PID + re-allocation (fault known - thesis),True,93.283,nan,93.283,0.060,nan,98.852,0.000,False
+no fault,0.000,3.000,PID + re-allocation (fault known - thesis),True,90.681,nan,90.681,0.040,nan,98.468,0.000,False
+no fault,0.000,4.000,PID + re-allocation (fault known - thesis),True,91.757,nan,91.757,0.041,nan,98.275,0.000,False
+no fault,0.000,5.000,PID + re-allocation (fault known - thesis),True,90.361,nan,90.361,0.035,nan,97.997,0.000,False
+no fault,0.000,6.000,PID + re-allocation (fault known - thesis),True,94.487,nan,94.487,0.043,nan,97.883,0.000,False
+no fault,0.000,8.000,PID + re-allocation (fault known - thesis),True,90.261,nan,90.261,0.024,nan,96.982,0.000,False
+no fault,0.000,10.000,PID + re-allocation (fault known - thesis),True,91.123,nan,91.123,0.015,nan,96.370,0.000,False
+no fault,0.000,12.000,PID + re-allocation (fault known - thesis),True,92.530,nan,92.530,0.023,nan,95.788,0.000,False
+no fault,0.000,15.000,PID + re-allocation (fault known - thesis),True,90.427,nan,90.427,0.015,nan,94.772,0.000,False
+no fault,0.000,0.100,ADRC (fault unknown - proposed),False,0.043,0.000,0.000,-0.000,10.000,71.024,0.000,True
+no fault,0.000,0.200,ADRC (fault unknown - proposed),False,0.087,0.000,0.000,-0.000,10.000,71.107,0.000,True
+no fault,0.000,0.300,ADRC (fault unknown - proposed),False,0.130,0.000,0.000,-0.000,10.000,71.191,0.000,True
+no fault,0.000,0.500,ADRC (fault unknown - proposed),False,0.217,0.000,0.000,-0.000,10.000,71.504,0.000,True
+no fault,0.000,1.000,ADRC (fault unknown - proposed),False,0.435,0.000,0.000,-0.000,10.000,72.554,0.000,True
+no fault,0.000,2.000,ADRC (fault unknown - proposed),False,0.870,0.000,0.000,-0.000,10.000,74.654,0.000,True
+no fault,0.000,3.000,ADRC (fault unknown - proposed),False,1.305,0.000,0.000,-0.000,10.000,76.698,0.000,True
+no fault,0.000,4.000,ADRC (fault unknown - proposed),False,1.740,0.000,0.000,-0.000,10.000,78.692,0.000,True
+no fault,0.000,5.000,ADRC (fault unknown - proposed),False,2.176,0.000,0.000,-0.000,10.000,80.638,0.000,True
+no fault,0.000,6.000,ADRC (fault unknown - proposed),False,2.613,0.000,0.000,-0.000,10.000,82.540,0.000,True
+no fault,0.000,8.000,ADRC (fault unknown - proposed),False,3.489,0.001,0.000,-0.000,10.000,86.227,0.000,True
+no fault,0.000,10.000,ADRC (fault unknown - proposed),False,4.370,0.001,0.000,-0.000,10.000,89.772,0.000,True
+no fault,0.000,12.000,ADRC (fault unknown - proposed),False,5.256,0.001,0.000,-0.000,10.000,93.191,0.000,True
+no fault,0.000,15.000,ADRC (fault unknown - proposed),False,6.599,0.002,0.000,-0.000,10.000,98.084,0.000,True
+M1 fails,180.000,0.100,PID + re-allocation (fault known - thesis),False,2.161,29.452,3.215,47.651,9.930,97.864,10.000,True
+M1 fails,180.000,0.200,PID + re-allocation (fault known - thesis),False,4.332,32.578,7.316,80.375,9.920,99.058,10.000,False
+M1 fails,180.000,0.300,PID + re-allocation (fault known - thesis),True,6.522,90.514,90.514,6.748,9.881,99.377,0.510,False
+M1 fails,180.000,0.500,PID + re-allocation (fault known - thesis),True,11.006,92.072,92.072,4.933,9.897,98.897,0.390,False
+M1 fails,180.000,1.000,PID + re-allocation (fault known - thesis),True,25.536,93.568,93.568,2.413,9.939,97.476,0.250,False
+M1 fails,180.000,2.000,PID + re-allocation (fault known - thesis),True,93.283,nan,93.283,-0.060,nan,98.852,0.000,False
+M1 fails,180.000,3.000,PID + re-allocation (fault known - thesis),True,90.681,nan,90.681,-0.040,nan,98.468,0.000,False
+M1 fails,180.000,4.000,PID + re-allocation (fault known - thesis),True,91.757,nan,91.757,-0.041,nan,98.275,0.000,False
+M1 fails,180.000,5.000,PID + re-allocation (fault known - thesis),True,90.361,nan,90.361,-0.035,nan,97.997,0.000,False
+M1 fails,180.000,6.000,PID + re-allocation (fault known - thesis),True,94.487,nan,94.487,-0.043,nan,97.883,0.000,False
+M1 fails,180.000,8.000,PID + re-allocation (fault known - thesis),True,90.261,nan,90.261,-0.024,nan,96.982,0.000,False
+M1 fails,180.000,10.000,PID + re-allocation (fault known - thesis),True,91.123,nan,91.123,-0.015,nan,96.370,0.000,False
+M1 fails,180.000,12.000,PID + re-allocation (fault known - thesis),True,92.530,nan,92.530,-0.023,nan,95.788,0.000,False
+M1 fails,180.000,15.000,PID + re-allocation (fault known - thesis),True,90.427,nan,90.427,-0.015,nan,94.772,0.000,False
+M1 fails,180.000,0.100,ADRC (fault unknown - proposed),False,0.043,33.926,0.317,82.401,9.613,99.328,2.210,True
+M1 fails,180.000,0.200,ADRC (fault unknown - proposed),False,0.087,33.910,0.443,113.129,9.609,99.391,2.180,True
+M1 fails,180.000,0.300,ADRC (fault unknown - proposed),False,0.130,33.892,0.572,144.556,9.604,99.459,2.140,True
+M1 fails,180.000,0.500,ADRC (fault unknown - proposed),False,0.217,33.841,0.833,208.468,9.585,99.556,2.050,True
+M1 fails,180.000,1.000,ADRC (fault unknown - proposed),True,0.435,92.790,92.790,29.148,9.338,99.616,1.120,False
+M1 fails,180.000,2.000,ADRC (fault unknown - proposed),True,0.870,92.378,92.378,15.925,9.538,99.521,0.820,False
+M1 fails,180.000,3.000,ADRC (fault unknown - proposed),True,1.305,91.281,91.281,22.831,9.577,99.460,0.730,False
+M1 fails,180.000,4.000,ADRC (fault unknown - proposed),True,1.740,91.500,91.500,30.356,9.587,99.495,0.690,False
+M1 fails,180.000,5.000,ADRC (fault unknown - proposed),True,2.176,95.827,95.827,34.831,9.575,99.562,0.640,False
+M1 fails,180.000,6.000,ADRC (fault unknown - proposed),True,2.613,93.410,93.410,29.375,9.575,99.481,0.550,False
+M1 fails,180.000,8.000,ADRC (fault unknown - proposed),True,3.489,95.797,95.797,21.962,9.651,99.247,0.440,False
+M1 fails,180.000,10.000,ADRC (fault unknown - proposed),True,4.370,90.769,90.769,16.174,9.756,98.890,0.360,False
+M1 fails,180.000,12.000,ADRC (fault unknown - proposed),True,5.256,94.383,94.383,14.303,9.803,98.662,0.320,False
+M1 fails,180.000,15.000,ADRC (fault unknown - proposed),True,6.599,93.175,93.175,12.038,9.848,98.482,0.280,False
+M1 fails,180.000,0.100,ADRC + re-allocation (fault known - reference),False,0.043,11.734,0.190,48.154,9.936,92.605,0.920,True
+M1 fails,180.000,0.200,ADRC + re-allocation (fault known - reference),False,0.087,12.015,0.320,79.956,9.935,92.539,0.920,True
+M1 fails,180.000,0.300,ADRC + re-allocation (fault known - reference),False,0.130,12.343,0.451,111.957,9.935,92.545,0.920,True
+M1 fails,180.000,0.500,ADRC + re-allocation (fault known - reference),False,0.217,13.035,0.712,175.989,9.934,93.309,0.930,True
+M1 fails,180.000,1.000,ADRC + re-allocation (fault known - reference),False,0.435,15.166,1.365,335.928,9.929,95.142,0.940,True
+M1 fails,180.000,2.000,ADRC + re-allocation (fault known - reference),False,0.870,22.112,2.664,654.912,9.905,98.316,10.000,True
+M1 fails,180.000,3.000,ADRC + re-allocation (fault known - reference),True,1.305,90.064,90.064,22.265,9.701,99.570,0.620,False
+M1 fails,180.000,4.000,ADRC + re-allocation (fault known - reference),True,1.740,91.327,91.327,12.060,9.817,99.243,0.420,False
+M1 fails,180.000,5.000,ADRC + re-allocation (fault known - reference),True,2.176,93.281,93.281,8.845,9.877,98.818,0.340,False
+M1 fails,180.000,6.000,ADRC + re-allocation (fault known - reference),True,2.613,90.558,90.558,6.801,9.911,98.356,0.290,False
+M1 fails,180.000,8.000,ADRC + re-allocation (fault known - reference),True,3.489,95.734,95.734,5.889,9.929,97.892,0.250,False
+M1 fails,180.000,10.000,ADRC + re-allocation (fault known - reference),True,4.370,93.178,93.178,4.931,9.943,97.495,0.220,False
+M1 fails,180.000,12.000,ADRC + re-allocation (fault known - reference),True,5.256,90.516,90.516,4.349,9.952,97.274,0.200,False
+M1 fails,180.000,15.000,ADRC + re-allocation (fault known - reference),True,6.599,97.826,97.826,4.619,9.952,98.084,0.190,False
+M1 fails,0.000,0.100,PID + re-allocation (fault known - thesis),False,2.161,26.168,0.771,-1.520,9.936,96.211,1.790,True
+M1 fails,0.000,0.200,PID + re-allocation (fault known - thesis),False,4.332,24.469,3.060,-0.590,9.939,95.283,10.000,True
+M1 fails,0.000,0.300,PID + re-allocation (fault known - thesis),False,6.522,21.954,5.509,-0.289,9.942,94.231,10.000,False
+M1 fails,0.000,0.500,PID + re-allocation (fault known - thesis),False,11.006,21.606,10.526,-0.124,9.949,93.092,10.000,False
+M1 fails,0.000,1.000,PID + re-allocation (fault known - thesis),False,25.536,36.546,24.913,-0.066,9.948,99.060,10.000,False
+M1 fails,0.000,2.000,PID + re-allocation (fault known - thesis),True,93.283,nan,93.283,0.060,nan,98.852,0.000,False
+M1 fails,0.000,3.000,PID + re-allocation (fault known - thesis),True,90.681,nan,90.681,0.040,nan,98.468,0.000,False
+M1 fails,0.000,4.000,PID + re-allocation (fault known - thesis),True,91.757,nan,91.757,0.041,nan,98.275,0.000,False
+M1 fails,0.000,5.000,PID + re-allocation (fault known - thesis),True,90.361,nan,90.361,0.035,nan,97.997,0.000,False
+M1 fails,0.000,6.000,PID + re-allocation (fault known - thesis),True,94.487,nan,94.487,0.043,nan,97.883,0.000,False
+M1 fails,0.000,8.000,PID + re-allocation (fault known - thesis),True,90.261,nan,90.261,0.024,nan,96.982,0.000,False
+M1 fails,0.000,10.000,PID + re-allocation (fault known - thesis),True,91.123,nan,91.123,0.015,nan,96.370,0.000,False
+M1 fails,0.000,12.000,PID + re-allocation (fault known - thesis),True,92.530,nan,92.530,0.023,nan,95.788,0.000,False
+M1 fails,0.000,15.000,PID + re-allocation (fault known - thesis),True,90.427,nan,90.427,0.015,nan,94.772,0.000,False
+M1 fails,0.000,0.100,ADRC (fault unknown - proposed),False,0.043,33.946,0.067,21.364,9.617,99.145,2.250,True
+M1 fails,0.000,0.200,ADRC (fault unknown - proposed),False,0.087,33.953,0.196,-0.074,9.619,99.062,2.270,True
+M1 fails,0.000,0.300,ADRC (fault unknown - proposed),False,0.130,33.959,0.018,-0.001,9.620,98.921,2.280,True
+M1 fails,0.000,0.500,ADRC (fault unknown - proposed),False,0.217,33.977,0.000,0.000,9.622,98.642,2.290,True
+M1 fails,0.000,1.000,ADRC (fault unknown - proposed),False,0.435,34.209,0.000,0.000,9.624,98.127,2.250,True
+M1 fails,0.000,2.000,ADRC (fault unknown - proposed),False,0.870,34.378,0.000,0.000,9.626,99.348,2.150,True
+M1 fails,0.000,3.000,ADRC (fault unknown - proposed),False,1.305,34.790,0.000,0.000,9.631,99.297,2.160,True
+M1 fails,0.000,4.000,ADRC (fault unknown - proposed),False,1.740,34.749,0.145,-0.043,9.642,99.040,2.280,True
+M1 fails,0.000,5.000,ADRC (fault unknown - proposed),False,2.176,34.422,0.030,-0.043,9.648,99.030,2.370,True
+M1 fails,0.000,6.000,ADRC (fault unknown - proposed),False,2.613,33.138,0.019,0.000,9.660,98.494,2.200,True
+M1 fails,0.000,8.000,ADRC (fault unknown - proposed),False,3.489,29.496,0.833,0.007,9.701,95.454,7.260,True
+M1 fails,0.000,10.000,ADRC (fault unknown - proposed),False,4.370,24.666,2.911,-0.041,9.761,96.646,10.000,True
+M1 fails,0.000,12.000,ADRC (fault unknown - proposed),False,5.256,18.565,7.941,0.096,9.837,94.286,10.000,False
+M1 fails,0.000,15.000,ADRC (fault unknown - proposed),False,6.599,13.754,11.298,-0.873,9.950,98.938,10.000,False
+M1 fails,0.000,0.100,ADRC + re-allocation (fault known - reference),False,0.043,11.550,0.000,-0.001,9.936,92.794,0.920,True
+M1 fails,0.000,0.200,ADRC + re-allocation (fault known - reference),False,0.087,11.416,0.000,0.000,9.936,92.776,0.920,True
+M1 fails,0.000,0.300,ADRC + re-allocation (fault known - reference),False,0.130,11.258,0.000,0.000,9.937,92.720,0.920,True
+M1 fails,0.000,0.500,ADRC + re-allocation (fault known - reference),False,0.217,10.905,0.000,0.000,9.937,92.508,0.930,True
+M1 fails,0.000,1.000,ADRC + re-allocation (fault known - reference),False,0.435,10.233,0.000,0.000,9.938,91.900,0.950,True
+M1 fails,0.000,2.000,ADRC + re-allocation (fault known - reference),False,0.870,9.027,0.000,0.000,9.941,90.820,0.880,True
+M1 fails,0.000,3.000,ADRC + re-allocation (fault known - reference),False,1.305,8.806,0.000,0.000,9.946,90.113,0.780,True
+M1 fails,0.000,4.000,ADRC + re-allocation (fault known - reference),False,1.740,8.341,0.000,0.000,9.950,89.448,0.640,True
+M1 fails,0.000,5.000,ADRC + re-allocation (fault known - reference),False,2.176,8.031,0.000,0.000,9.954,88.908,0.650,True
+M1 fails,0.000,6.000,ADRC + re-allocation (fault known - reference),False,2.613,7.794,0.000,0.000,9.959,88.489,0.650,True
+M1 fails,0.000,8.000,ADRC + re-allocation (fault known - reference),False,3.489,8.003,0.000,0.000,9.971,88.048,0.650,True
+M1 fails,0.000,10.000,ADRC + re-allocation (fault known - reference),False,4.370,6.793,0.000,0.000,9.980,89.772,0.640,True
+M1 fails,0.000,12.000,ADRC + re-allocation (fault known - reference),False,5.256,5.046,0.000,0.000,9.987,93.191,0.440,True
+M1 fails,0.000,15.000,ADRC + re-allocation (fault known - reference),False,6.599,1.794,0.000,0.000,9.997,98.084,0.000,True

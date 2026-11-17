@@ -17,7 +17,8 @@ kf = 3.13e-4
 km = 7.5e-6
 g = 9.81
 
-w_max = 110.0      # max motor speed (rad/s)
+twr = 2.0          # thrust to weight ratio with all 6 motors at full speed
+w_max = np.sqrt(twr * m * g / (6 * kf))   # max motor speed (rad/s), about 99.6
 tau_mot = 0.10     # motor time constant (s)
 c_yaw = 0.02       # rotor drag yaw damping
 Ts = 0.01          # control loop time (s)
@@ -241,7 +242,7 @@ def plot_case(D, name, title, t_mark=None, D2=None, folder="results"):
     os.makedirs(folder, exist_ok=True)
     t = D[:, 0]
     deg = np.rad2deg
-    fig, ax = plt.subplots(5, 2, figsize=(12, 16))
+    fig, ax = plt.subplots(6, 2, figsize=(12, 19))
     ax = ax.flatten()
     ax[0].plot(t, deg(D[:, 1]), label="$\\phi$")
     ax[0].set_ylabel("$\\phi$ (deg)")
@@ -268,6 +269,15 @@ def plot_case(D, name, title, t_mark=None, D2=None, folder="results"):
     ax[9].plot(t, D[:, 17]*10, label="$\\tau_\\psi$ des x10")
     ax[9].plot(t, D[:, 21]*10, "--", label="$\\tau_\\psi$ act x10")
     ax[9].set_ylabel("torque (Nm)")
+    # thrust of each motor and the total, against the limits
+    for i in range(6):
+        ax[10].plot(t, kf * D[:, 9+i]**2, label="M%d" % (i+1))
+    ax[10].axhline(kf * w_max**2, color="k", ls="--", lw=1, label="motor max")
+    ax[10].set_ylabel("motor thrust $k_f\omega^2$ (N)")
+    ax[11].plot(t, D[:, 22], label="total thrust")
+    ax[11].axhline(m * g, color="k", ls=":", lw=1, label="weight")
+    ax[11].axhline(6 * kf * w_max**2, color="k", ls="--", lw=1, label="6-motor max (T/W = %.0f)" % twr)
+    ax[11].set_ylabel("total thrust (N)")
     if D2 is not None:
         ax[0].plot(D2[:, 0], deg(D2[:, 1]), "k:", lw=1.5, label="no realloc. (crash)")
         ax[6].plot(D2[:, 0], D2[:, 7], "k:", lw=1.5, label="no realloc. (crash)")
