@@ -141,8 +141,9 @@ def run_case(ctrl="adrc", ftc=False, eta=1.0, r=0.0, ang=0.0, noise=0.0):
             y_meas[3:6] += np.deg2rad(5 * noise) * rng.standard_normal(3)
             y_meas[6] += 0.01 * noise * rng.standard_normal()
         w_cmd, M_des = loop.step(y_meas, eff if ftc else np.ones(6))
+        M_act = h.G @ (eff * y[8:14]**2)
         data.append(np.r_[t, y, loop.M_exp[0], loop.roll_dist(), eff * h.kf * y[8:14]**2,
-                          M_des[0], (h.G @ (eff * y[8:14]**2))[0]])
+                          M_des[0], M_act[0], M_des, M_act])
         if h.crashed(y):
             crash = True
             break
@@ -211,6 +212,79 @@ def write_csv(path, rows):
             f.write(",".join(("%.3f" % v) if isinstance(v, float) else str(v) for v in r.values()) + "\n")
 
 
+def plot_full(D, crash, title, path):
+    # every metric of one run: attitude, altitude, motors, thrust, torques, observer
+    t = D[:, 0]
+    deg = np.rad2deg
+    tilt = deg(np.maximum(abs(D[:, 1]), abs(D[:, 2])))
+    f_max = h.kf * h.w_max**2
+    fig, ax = plt.subplots(4, 3, figsize=(18, 15), sharex=True)
+    ax = ax.flatten()
+    ax[0].plot(t, deg(D[:, 1]), label="roll")
+    ax[0].plot(t, deg(D[:, 2]), label="pitch")
+    ax[0].set_ylabel("angle (deg)")
+    ax[1].plot(t, deg(D[:, 3]), label="yaw")
+    ax[1].set_ylabel("yaw (deg)")
+    ax[2].plot(t, tilt, label="tilt = max(|roll|, |pitch|)")
+    ax[2].set_ylabel("tilt (deg)")
+    ax[3].plot(t, deg(D[:, 4]), label="roll rate p")
+    ax[3].plot(t, deg(D[:, 5]), label="pitch rate q")
+    ax[3].plot(t, deg(D[:, 6]), label="yaw rate r")
+    ax[3].set_ylabel("rate (deg/s)")
+    ax[4].plot(t, D[:, 7], label="z")
+    ax[4].axhline(h.z_ref, color="k", ls=":", lw=1, label="z ref")
+    ax[4].set_ylabel("altitude (m)")
+    ax[5].plot(t, D[:, 8], label="climb rate")
+    ax[5].set_ylabel("climb rate (m/s)")
+    for i in range(6):
+        ax[6].plot(t, D[:, 9+i], label="M%d" % (i+1))
+        ax[7].plot(t, D[:, 17+i], label="M%d" % (i+1))
+    ax[6].axhline(h.w_max, color="k", ls="--", lw=1, label="max")
+    ax[6].set_ylabel("motor speed (rad/s)")
+    ax[7].axhline(f_max, color="k", ls="--", lw=1, label="max")
+    ax[7].axhline(h.m * h.g / 6, color="k", ls=":", lw=1, label="W/6")
+    ax[7].set_ylabel("motor thrust (N)")
+    ax[8].plot(t, D[:, 32], label="total thrust")
+    ax[8].plot(t, D[:, 28], "--", label="desired thrust")
+    ax[8].axhline(h.m * h.g, color="k", ls=":", lw=1, label="weight")
+    ax[8].axhline(6 * f_max, color="k", ls="--", lw=1, label="6-motor max")
+    ax[8].set_ylabel("thrust (N)")
+    ax[9].plot(t, D[:, 25], label="desired roll torque")
+    ax[9].plot(t, D[:, 29], "--", label="produced by motors")
+    ax[9].set_ylabel("roll torque (N m)")
+    ax[10].plot(t, D[:, 26], label="desired pitch torque")
+    ax[10].plot(t, D[:, 30], "--", label="produced by motors")
+    ax[10].set_ylabel("pitch torque (N m)")
+    if np.any(D[:, 16] != 0):
+        pdot = np.gradient(D[:, 4], h.Ts)
+        ax[11].plot(t, pdot - D[:, 15] / h.Jxx, label="actual roll disturbance")
+        ax[11].plot(t, D[:, 16], "--", label="LESO estimate z3")
+        ax[11].set_ylim(-150, 300)
+    else:
+        ax[11].text(0.5, 0.5, "no observer (PID)", ha="center", transform=ax[11].transAxes)
+    ax[11].set_ylabel("roll disturbance (rad/s^2)")
+    for a in ax:
+        a.axvline(t_fault, color="r", lw=1)
+        a.grid(True)
+        a.legend(fontsize=7)
+    for a in ax[9:]:
+        a.set_xlabel("time (s)")
+    m_ = metrics(D, crash)
+    if crash:
+        end = "CRASHED at t = %.2f s" % t[-1]
+    else:
+        end = "recovered, settle time %.2f s" % m_["settle_s"]
+    fig.suptitle("%s\n%s | peak tilt %.1f deg | altitude dip %.0f cm | peak motor %.1f rad/s"
+                 % (title, end, m_["max_tilt_deg"], 100 * (h.z_ref - m_["min_z_m"]), m_["max_motor"]))
+    fig.tight_layout()
+    fig.savefig(path, dpi=80)
+    plt.close(fig)
+
+
+def plot_full_args(args):
+    plot_full(*args)
+
+
 SETUPS = {"pid_blind": dict(ctrl="pid", ftc=False),
           "pid_realloc": dict(ctrl="pid", ftc=True),
           "adrc_blind": dict(ctrl="adrc", ftc=False),
@@ -220,6 +294,20 @@ NAMES = {"pid_blind": "PID (fault unknown)",
          "adrc_blind": "ADRC (fault unknown - proposed)",
          "adrc_realloc": "ADRC + re-allocation (fault known - reference)"}
 STYLE = {"pid_blind": "C0:", "pid_realloc": "C0-", "adrc_blind": "C3-", "adrc_realloc": "C3:"}
+FILE = {"pid_blind": "PID_fault_unknown", "pid_realloc": "PID_realloc_fault_known",
+        "adrc_blind": "ADRC_fault_unknown", "adrc_realloc": "ADRC_realloc_fault_known"}
+
+
+def case_file(setup, eta=None, r=None, ang=None):
+    # e.g. M1_loss_50pct__ADRC_fault_unknown.png, CG_4cm_between_M1-M4__PID_realloc_fault_known.png
+    # (every CG case has motor 1 failing at t_fault)
+    if eta is not None:
+        name = "no_fault" if eta == 0 else "M1_loss_%dpct" % round(100 * eta)
+    elif r == 0:
+        name = "CG_centre"
+    else:
+        name = "CG_%dcm_%s" % (round(100 * r), dir_name(ang).replace(" ", "_").replace("/", "-"))
+    return name + "__" + FILE[setup] + ".png"
 
 
 if __name__ == "__main__":
@@ -262,6 +350,17 @@ if __name__ == "__main__":
     fig.savefig(os.path.join(folder, "fault_sweep.png"), dpi=110)
     plt.close(fig)
     write_csv(os.path.join(folder, "fault_sweep.csv"), rows)
+    cases_dir = os.path.join(folder, "cases")
+    os.makedirs(cases_dir, exist_ok=True)
+    figs = []
+    i = 0
+    for e in etas:
+        for s in SETUPS:
+            D, crash = runs[i]
+            i += 1
+            title = "%s, motor 1 loses %d%% at t = %.0f s" % (NAMES[s], 100 * e, t_fault)
+            figs.append((D, crash, title, os.path.join(cases_dir, case_file(s, eta=e))))
+    pool.map(plot_full_args, figs)
 
     # motor thrusts at total loss of motor 1
     f_max = h.kf * h.w_max**2
@@ -338,9 +437,19 @@ if __name__ == "__main__":
         for s in SETUPS:
             jobs.append(dict(SETUPS[s], r=r, ang=a))
             labels.append({"cg": name, "angle_deg": a, "r_cm": 100 * r, "setup": NAMES[s]})
-    res = pool.map(run_metrics, jobs)
-    rows = [{**labels[i], **res[i]} for i in range(len(jobs))]
+    cg_runs = pool.map(run_args, jobs)
+    rows = [{**labels[i], **metrics(*cg_runs[i])} for i in range(len(jobs))]
     write_csv(os.path.join(folder, "cg_locations.csv"), rows)
+    figs = []
+    for i in range(len(jobs)):
+        D, crash = cg_runs[i]
+        setup = list(SETUPS)[i % len(SETUPS)]
+        a = jobs[i]["ang"]
+        title = "%s, CG %.0f cm %s, motor 1 fails at t = %.0f s" % (
+            labels[i]["setup"], 100 * jobs[i]["r"], labels[i]["cg"], t_fault)
+        figs.append((D, crash, title, os.path.join(cases_dir, case_file(setup, r=jobs[i]["r"], ang=a))))
+    pool.map(plot_full_args, figs)
+    del cg_runs, figs
     print("cg locations done")
 
     # 3) largest CG offset that still recovers, per direction

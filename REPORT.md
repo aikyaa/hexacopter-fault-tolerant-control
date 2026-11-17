@@ -146,6 +146,18 @@ Peak tilt over the whole run as the CG offset grows from 1 mm to 15 cm (90° = c
 
 ADRC passes about 7× more noise to the motors because of its fast observer. With T/W = 2 there is too little thrust margin left for that, and with 1° of noise it crashes after the fault.
 
+### Full plots for every simulation
+
+Every ADRC-study run also has its own 12-panel plot in [python/results_adrc/cases/](python/results_adrc/cases/): 20 fault-sweep runs (e.g. `M1_loss_50pct__ADRC_fault_unknown.png`) and 52 CG runs with motor 1 failing (e.g. `CG_4cm_toward_M1__PID_realloc_fault_known.png`, `CG_4cm_between_M1-M4__ADRC_realloc_fault_known.png`). Each shows:
+
+- roll and pitch, yaw, tilt, and the three body rates
+- altitude and climb rate
+- each motor's speed and thrust against its limit, and total thrust against weight and the 6-motor maximum
+- desired vs produced roll and pitch torque, and desired vs produced thrust
+- the LESO disturbance estimate against the actual roll disturbance (ADRC runs)
+
+The title gives the outcome (recovered with settle time, or crash time), peak tilt, altitude dip and peak motor speed. The re-allocation cases in [python/results/](python/results/) have the same kind of full plot.
+
 ## 5. ROS 2 implementation
 
 - **Nodes:** `plant_node` (dynamics, fault, CG offset, RViz scene) and `ftc_node` (controller and allocation) run in lockstep over `/state` and `/motor_cmd`. Both import the same Python modules as the offline study.
